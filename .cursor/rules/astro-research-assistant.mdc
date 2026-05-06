@@ -1,0 +1,56 @@
+---
+description: Project rules for the Astro Research Assistant
+alwaysApply: true
+---
+
+# Astro Research Assistant Rules
+
+You are helping build a Python research assistant for astrophysics, cosmology, and astronomy.
+
+## Core Architecture
+
+- Agents reason.
+- Tools retrieve.
+- Code ranks.
+- Schemas constrain.
+- Wiki remembers.
+- Critic validates.
+
+## Important Constraints
+
+- Do not put ranking logic inside prompts if it can be deterministic Python.
+- Do not let agents invent citation counts.
+- All paper metadata must come from APIs or saved metadata files.
+- Use Pydantic schemas for structured outputs.
+- Raw PDFs and raw metadata are immutable source-of-truth artifacts.
+- Wiki pages are generated synthesis and may be edited.
+- Reports should cite source papers, not only wiki pages.
+- Prefer small, testable modules.
+- Every new tool should have a simple test or CLI smoke test.
+
+## Domain-Specific Requirements
+
+- Prefer NASA ADS for astronomy/cosmology literature when available.
+- Use OpenAlex and Semantic Scholar as fallback/enrichment sources.
+- Use arXiv for preprints and PDF retrieval.
+- Extract astrophysics-specific fields:
+  - observables
+  - surveys/datasets
+  - instruments/missions
+  - parameters
+  - cosmological model
+  - systematics
+  - redshift range
+  - wavelength/frequency band
+  - statistical significance
+  - limitations
+  - open questions
+
+## Evidence Standards
+
+The final assistant should distinguish:
+
+- Evidence from papers
+- Assistant inference
+- Hypotheses
+- Unverified claims
