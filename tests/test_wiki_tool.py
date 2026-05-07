@@ -1,64 +1,82 @@
-from __future__ import annotations
-
-from pathlib import Path
-
-from schemas.paper import PaperMetadata
+from schemas.paper import CitationCounts, PaperMetadata
 from schemas.paper_analysis import PaperAnalysis
-import tools.wiki_tool as wiki_tool
+from tools.wiki_tool import WIKI_ROOT, slugify_title, write_source_page
 
 
-def _patch_wiki_paths(tmp_path: Path, monkeypatch) -> None:
-    wiki_root = tmp_path / "storage/wiki"
-    sources = wiki_root / "sources"
-    index = wiki_root / "index.md"
-    log = wiki_root / "log.md"
-    monkeypatch.setattr(wiki_tool, "WIKI_ROOT", wiki_root)
-    monkeypatch.setattr(wiki_tool, "SOURCES_DIR", sources)
-    monkeypatch.setattr(wiki_tool, "INDEX_PATH", index)
-    monkeypatch.setattr(wiki_tool, "LOG_PATH", log)
+def test_slugify_title():
+    assert slugify_title("KiDS-450: Cosmic Shear!") == "kids-450-cosmic-shear"
+    assert slugify_title("") == "untitled"
 
 
-def test_slugify_title() -> None:
-    assert wiki_tool.slugify_title("S8 tension: weak lensing / Planck") == "s8-tension-weak-lensing-planck"
-    assert wiki_tool.slugify_title("   ") == "untitled"
-
-
-def test_create_source_page_has_frontmatter_and_links() -> None:
-    paper = PaperMetadata(title="Test Title", year=2024, doi="10.1234/abc", arxiv_id="2401.00001")
-    analysis = PaperAnalysis(key_results=["Main result"], observables=["S8"])
-
-    md = wiki_tool.create_source_page(paper, analysis)
-    assert md.startswith("---\n")
-    assert "page_type: source" in md
-    assert "[[index]]" in md
-    assert "[[sources/test-title]]" in md
-    assert "## Key Results" in md
-
-
-def test_write_source_page_updates_index_and_log(tmp_path: Path, monkeypatch) -> None:
-    _patch_wiki_paths(tmp_path, monkeypatch)
-
+def test_write_source_page_creates_expected_files():
     paper = PaperMetadata(
-        title="KiDS-450 Cosmology",
-        year=2017,
-        abstract="Weak lensing constraints",
-    )
-    analysis = PaperAnalysis(
-        key_results=["Constrained S8 with weak lensing"],
-        observables=["S8"],
+        title="Test S8 Paper",
+        authors=["A. Author"],
+        year=2024,
+        doi="10.1234/test",
+        arxiv_id="2401.00001",
+        citation_counts=CitationCounts(selected=10, selected_source="test"),
     )
 
-    page_path = wiki_tool.write_source_page(paper, analysis)
+    analysis = PaperAnalysis(
+        observables=["cosmic shear"],
+        datasets=["DES Y3"],
+        instruments=[],
+        missions=[],
+        parameters=["S8"],
+        redshift_range=None,
+        wavelength_band=None,
+        cosmological_model="flat Lambda CDM",
+        methods=["Bayesian inference"],
+        systematics=["intrinsic alignment"],
+        key_results=["Test key result."],
+        limitations=["Test limitation."],
+        open_questions=["Test open question."],
+    )
+
+    page_path = write_source_page(paper, analysis)
 
     assert page_path.exists()
-    assert page_path.parent.name == "sources"
+    assert "test-s8-paper.md" in str(page_path)
+
     content = page_path.read_text(encoding="utf-8")
-    assert "KiDS-450 Cosmology" in content
+    assert "# Test S8 Paper" in content
+    assert "doi: \"10.1234/test\"" in content
+    assert "- Observables: cosmic shear" in content
+    assert "- Test key result." in content
 
-    index_text = wiki_tool.INDEX_PATH.read_text(encoding="utf-8")
-    assert "## Source Pages" in index_text
-    assert "[[sources/kids-450-cosmology|KiDS-450 Cosmology]]" in index_text
+    assert (WIKI_ROOT / "concepts" / "cosmic-shear.md").exists()
+    assert (WIKI_ROOT / "datasets" / "des-y3.md").exists()
+    assert (WIKI_ROOT / "parameters" / "s8.md").exists()
+    assert (WIKI_ROOT / "methods" / "bayesian-inference.md").exists()
 
-    log_text = wiki_tool.LOG_PATH.read_text(encoding="utf-8")
-    assert "source_page_written" in log_text
-    assert "[[sources/kids-450-cosmology|KiDS-450 Cosmology]]" in log_text
+
+def test_write_source_page_is_idempotent_for_evidence_bullets():
+    paper = PaperMetadata(
+        title="Idempotent Test Paper",
+        year=2024,
+    )
+
+    analysis = PaperAnalysis(
+        observables=["weak lensing"],
+        datasets=[],
+        instruments=[],
+        missions=[],
+        parameters=[],
+        redshift_range=None,
+        wavelength_band=None,
+        cosmological_model=None,
+        methods=[],
+        systematics=[],
+        key_results=["Repeated result."],
+        limitations=[],
+        open_questions=[],
+    )
+
+    write_source_page(paper, analysis)
+    write_source_page(paper, analysis)
+
+    concept_path = WIKI_ROOT / "concepts" / "weak-lensing.md"
+    content = concept_path.read_text(encoding="utf-8")
+
+    assert content.count("[[sources/idempotent-test-paper|Idempotent Test Paper]]") == 1

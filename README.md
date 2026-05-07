@@ -79,6 +79,7 @@ High-level directories:
 - `tools/wiki_tool.py`
   - `create_source_page(...)`, `write_source_page(...)`, `update_index(...)`, `append_log(...)`, `slugify_title(...)`
   - writes source pages under `storage/wiki/sources/` with YAML frontmatter and Obsidian-style links.
+  - updates evidence pages under `storage/wiki/concepts/`, `storage/wiki/datasets/`, `storage/wiki/parameters/`, and `storage/wiki/methods/`.
 
 ## Environment Variables
 
@@ -106,6 +107,21 @@ uv run python tools/arxiv_tool.py "S8 tension weak lensing Planck" --max-results
 uv run python tools/ads_tool.py "S8 tension weak lensing Planck" --max-results 5
 S2_DEBUG=1 uv run python tools/semantic_scholar_tool.py
 ```
+
+Wiki smoke script:
+
+```bash
+uv run python scripts/test_wiki_tool.py
+```
+
+Idempotency check (run twice):
+
+```bash
+uv run python scripts/test_wiki_tool.py
+uv run python scripts/test_wiki_tool.py
+```
+
+Expected behavior: evidence bullets are not duplicated when the same source/analysis is written repeatedly.
 
 ## Tests
 
@@ -152,9 +168,16 @@ Paper-type multipliers:
 ## Wiki Output Behavior
 
 - Source pages are written to `storage/wiki/sources/<slug>.md`.
+- Source page frontmatter currently uses `updated_at` (MVP behavior) and rewrites the page on updates.
 - `storage/wiki/index.md` is updated with Obsidian links.
 - `storage/wiki/log.md` receives timestamped append-only events.
-- Concept-page updates are intentionally not implemented yet.
+- Evidence pages are updated under:
+  - `storage/wiki/concepts/`
+  - `storage/wiki/datasets/`
+  - `storage/wiki/parameters/`
+  - `storage/wiki/methods/`
+- New evidence pages use YAML frontmatter (`page_type`, `title`) and keep an `## Evidence from sources` section.
+- Evidence entries are append-only and deduplicated per source bullet.
 
 ## Operational Notes
 

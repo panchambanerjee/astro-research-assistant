@@ -12,6 +12,10 @@ from schemas.paper_analysis import PaperAnalysis
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 WIKI_ROOT = PROJECT_ROOT / "storage/wiki"
 SOURCES_DIR = WIKI_ROOT / "sources"
+CONCEPTS_DIR = WIKI_ROOT / "concepts"
+DATASETS_DIR = WIKI_ROOT / "datasets"
+PARAMETERS_DIR = WIKI_ROOT / "parameters"
+METHODS_DIR = WIKI_ROOT / "methods"
 INDEX_PATH = WIKI_ROOT / "index.md"
 LOG_PATH = WIKI_ROOT / "log.md"
 
@@ -31,6 +35,141 @@ def _line_or_none(items: list[str]) -> str:
     if not items:
         return "_None_"
     return ", ".join(items)
+
+
+def _update_evidence_page(
+    *,
+    directory: Path,
+    page_name: str,
+    page_type: str,
+    source_link: str,
+    evidence_text: str,
+) -> Path:
+    """
+    Create or update a wiki evidence page while preserving existing content.
+
+    Appends a bullet under '## Evidence from sources' only if that bullet is new.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    slug = slugify_title(page_name)
+    page_path = directory / f"{slug}.md"
+    bullet = f"- {source_link}: {evidence_text.strip()}"
+
+    if page_path.exists():
+        content = page_path.read_text(encoding="utf-8")
+    else:
+        title = page_name.strip() or "Untitled"
+        content = (
+            "---\n"
+            f'page_type: "{page_type}"\n'
+            f'title: "{_yaml_escape(title)}"\n'
+            "---\n\n"
+            f"# {title}\n\n"
+            "## Evidence from sources\n\n"
+        )
+
+    lines = content.splitlines()
+    heading = "## Evidence from sources"
+
+    if heading not in lines:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.extend([heading, ""])
+
+    # If exact bullet already exists, keep content unchanged.
+    if bullet in lines:
+        page_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+        return page_path
+
+    out: list[str] = []
+    in_section = False
+    inserted = False
+    for line in lines:
+        if line.strip() == heading:
+            in_section = True
+            out.append(line)
+            continue
+        if in_section and line.startswith("## "):
+            if not inserted:
+                if out and out[-1].strip():
+                    out.append("")
+                out.append(bullet)
+                inserted = True
+            in_section = False
+        out.append(line)
+
+    if in_section and not inserted:
+        if out and out[-1].strip():
+            out.append("")
+        out.append(bullet)
+        inserted = True
+    if not inserted:
+        out.extend(["", heading, "", bullet])
+
+    page_path.write_text("\n".join(out).rstrip() + "\n", encoding="utf-8")
+    return page_path
+
+
+def _update_analysis_pages(paper: PaperMetadata, analysis: PaperAnalysis, source_slug: str, source_title: str) -> list[Path]:
+    """Update concept/dataset/parameter/method evidence pages from a PaperAnalysis."""
+    source_link = f"[[sources/{source_slug}|{source_title}]]"
+    updated_paths: list[Path] = []
+
+    for concept in analysis.observables:
+        updated_paths.append(
+            _update_evidence_page(
+                directory=CONCEPTS_DIR,
+                page_name=concept,
+                page_type="concept",
+                source_link=source_link,
+                evidence_text="Reported as an observable in this source.",
+            )
+        )
+    if analysis.cosmological_model:
+        updated_paths.append(
+            _update_evidence_page(
+                directory=CONCEPTS_DIR,
+                page_name=analysis.cosmological_model,
+                page_type="concept",
+                source_link=source_link,
+                evidence_text="Used or discussed as the cosmological model.",
+            )
+        )
+
+    for dataset in analysis.datasets:
+        updated_paths.append(
+            _update_evidence_page(
+                directory=DATASETS_DIR,
+                page_name=dataset,
+                page_type="dataset",
+                source_link=source_link,
+                evidence_text="Used or analyzed in this source.",
+            )
+        )
+
+    for parameter in analysis.parameters:
+        updated_paths.append(
+            _update_evidence_page(
+                directory=PARAMETERS_DIR,
+                page_name=parameter,
+                page_type="parameter",
+                source_link=source_link,
+                evidence_text="Constrained or discussed in this source.",
+            )
+        )
+
+    for method in analysis.methods:
+        updated_paths.append(
+            _update_evidence_page(
+                directory=METHODS_DIR,
+                page_name=method,
+                page_type="method",
+                source_link=source_link,
+                evidence_text="Applied in this source.",
+            )
+        )
+
+    return updated_paths
 
 
 def create_source_page(paper: PaperMetadata, analysis: PaperAnalysis) -> str:
@@ -57,7 +196,7 @@ def create_source_page(paper: PaperMetadata, analysis: PaperAnalysis) -> str:
         f'title: "{_yaml_escape(title)}"',
         f"slug: {slug}",
         "page_type: source",
-        f"created_at: {now_iso}",
+        f"updated_at: {now_iso}",
         f"year: {paper.year if paper.year is not None else 'null'}",
         f'doi: "{_yaml_escape(paper.doi)}"' if paper.doi else "doi: null",
         f'arxiv_id: "{_yaml_escape(paper.arxiv_id)}"' if paper.arxiv_id else "arxiv_id: null",
@@ -209,4 +348,9 @@ def write_source_page(paper: PaperMetadata, analysis: PaperAnalysis) -> Path:
     summary = analysis.key_results[0] if analysis.key_results else (paper.abstract or "")
     update_index(page_path=page_path, title=title, summary=summary[:180], page_type="source")
     append_log(event_type="source_page_written", message=f"Wrote [[sources/{slug}|{title}]]")
+    updated_pages = _update_analysis_pages(paper=paper, analysis=analysis, source_slug=slug, source_title=title)
+    for updated in updated_pages:
+        rel = updated.relative_to(WIKI_ROOT).as_posix()
+        rel = rel[:-3] if rel.endswith(".md") else rel
+        append_log(event_type="evidence_page_updated", message=f"Updated [[{rel}]] from [[sources/{slug}|{title}]]")
     return page_path
