@@ -1,6 +1,10 @@
+---
+page_type: "concept"
+title: "weak gravitational lensing"
+---
+
 # weak gravitational lensing
 
-Type: concept
 
 ## Evidence from sources
 

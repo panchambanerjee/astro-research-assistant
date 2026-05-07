@@ -1,6 +1,10 @@
+---
+page_type: "dataset"
+title: "DES Y3"
+---
+
 # DES Y3
 
-Type: dataset
 
 ## Evidence from sources
 

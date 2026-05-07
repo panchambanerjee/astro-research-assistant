@@ -1,6 +1,10 @@
+---
+page_type: "concept"
+title: "cosmic shear"
+---
+
 # cosmic shear
 
-Type: concept
 
 ## Evidence from sources
 

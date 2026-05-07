@@ -1,0 +1,19 @@
+weak_lensing:
+  - intrinsic alignment
+  - photometric redshift uncertainty
+  - shear calibration
+  - baryonic feedback
+  - nonlinear matter power spectrum modeling
+
+CMB:
+  - foreground contamination
+  - beam systematics
+  - calibration uncertainty
+  - lensing reconstruction bias
+
+high_redshift_galaxies:
+  - photometric redshift contamination
+  - dust attenuation
+  - stellar population synthesis assumptions
+  - IMF assumptions
+  - nebular emission

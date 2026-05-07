@@ -1,0 +1,90 @@
+cmb_temperature_anisotropy:
+  aliases: ["CMB TT", "temperature power spectrum"]
+  domain: "early_universe"
+  probes: ["primordial perturbations", "geometry", "matter/radiation content"]
+  related_parameters: ["Omega_b_h2", "Omega_c_h2", "H0", "ns", "As", "tau", "Neff"]
+  common_systematics: ["foreground contamination", "beam uncertainty", "calibration drift"]
+
+cmb_polarization:
+  aliases: ["CMB EE/TE", "large-scale E-mode"]
+  domain: "early_universe"
+  probes: ["reionization history", "acoustic physics", "inflationary signatures"]
+  related_parameters: ["tau", "As", "ns", "r"]
+  common_systematics: ["foreground polarization", "instrumental leakage", "beam mismatch"]
+
+cmb_lensing:
+  aliases: ["CMB convergence", "phi-phi spectrum"]
+  domain: "late_plus_early_universe_link"
+  probes: ["integrated matter distribution", "growth of structure"]
+  related_parameters: ["S8", "sigma8", "Omega_m", "sum_mnu"]
+  common_systematics: ["reconstruction noise bias", "foreground trispectrum contamination"]
+
+bao:
+  aliases: ["baryon acoustic oscillations", "distance ruler"]
+  domain: "late_universe"
+  probes: ["distance-redshift relation", "expansion history"]
+  related_parameters: ["H0", "Omega_m", "w0", "wa"]
+  common_systematics: ["selection function", "fiber collisions", "nonlinear reconstruction assumptions"]
+
+redshift_space_distortions:
+  aliases: ["RSD", "f_sigma8"]
+  domain: "late_universe"
+  probes: ["growth rate of structure", "gravity tests"]
+  related_parameters: ["f_sigma8", "sigma8", "Omega_m", "gamma_growth_index"]
+  common_systematics: ["velocity bias", "nonlinear modeling", "survey window effects"]
+
+type_ia_supernovae:
+  aliases: ["SN Ia", "standardizable candles"]
+  domain: "late_universe"
+  probes: ["luminosity distance", "cosmic acceleration"]
+  related_parameters: ["H0", "Omega_m", "w0", "wa"]
+  common_systematics: ["absolute magnitude calibration", "dust extinction", "selection bias"]
+
+cosmic_shear:
+  aliases: ["weak lensing shear", "tomographic shear"]
+  domain: "late_universe"
+  probes: ["matter clustering amplitude", "geometry and growth"]
+  related_parameters: ["S8", "sigma8", "Omega_m", "w0", "wa"]
+  common_systematics: ["intrinsic alignment", "shear calibration", "photo-z bias", "baryonic feedback"]
+
+galaxy_clustering:
+  aliases: ["two-point clustering", "P(k)", "xi(r)"]
+  domain: "late_universe"
+  probes: ["matter power spectrum shape", "bias-weighted clustering"]
+  related_parameters: ["Omega_m", "sigma8", "ns", "sum_mnu"]
+  common_systematics: ["galaxy bias model", "survey mask/window", "redshift failures"]
+
+cluster_counts:
+  aliases: ["halo abundance", "cluster mass function"]
+  domain: "late_universe"
+  probes: ["growth of structure", "matter density"]
+  related_parameters: ["sigma8", "Omega_m", "S8", "sum_mnu"]
+  common_systematics: ["mass calibration", "selection completeness", "projection effects"]
+
+strong_lens_time_delays:
+  aliases: ["time-delay cosmography", "H0LiCOW/TDCOSMO-like probes"]
+  domain: "late_universe"
+  probes: ["absolute distance scale", "H0 inference"]
+  related_parameters: ["H0", "Omega_m", "w0"]
+  common_systematics: ["lens mass-sheet degeneracy", "line-of-sight structure", "time-delay measurement errors"]
+
+standard_sirens:
+  aliases: ["gravitational-wave distance probes", "GW standard sirens"]
+  domain: "late_universe"
+  probes: ["luminosity distance-redshift relation"]
+  related_parameters: ["H0", "w0", "wa"]
+  common_systematics: ["host galaxy association", "selection effects", "waveform systematics"]
+
+lyman_alpha_forest:
+  aliases: ["Ly-alpha forest", "IGM flux power"]
+  domain: "high_redshift"
+  probes: ["small-scale matter power", "expansion at z~2-5"]
+  related_parameters: ["sigma8", "ns", "sum_mnu", "Omega_m"]
+  common_systematics: ["IGM thermal history", "continuum fitting", "metal-line contamination"]
+
+21cm_signal:
+  aliases: ["HI 21-cm", "intensity mapping", "EoR 21cm"]
+  domain: "high_redshift"
+  probes: ["reionization", "large-scale structure", "expansion history"]
+  related_parameters: ["tau", "Omega_m", "w0", "wa"]
+  common_systematics: ["foreground subtraction", "beam chromaticity", "calibration leakage"]

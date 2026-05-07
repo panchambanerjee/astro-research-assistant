@@ -1,6 +1,10 @@
+---
+page_type: "method"
+title: "Bayesian inference"
+---
+
 # Bayesian inference
 
-Type: method
 
 ## Evidence from sources
 

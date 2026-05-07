@@ -1,6 +1,10 @@
+---
+page_type: "method"
+title: "tomographic weak lensing"
+---
+
 # Tomographic weak lensing
 
-Type: method
 
 ## Evidence from sources
 

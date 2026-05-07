@@ -2,7 +2,7 @@
 title: "KiDS-450: cosmological parameter constraints from tomographic weak gravitational lensing"
 slug: kids-450-cosmological-parameter-constraints-from-tomographic-weak-gravitational-lensing
 page_type: source
-updated_at: 2026-05-07T20:44:36.644882+00:00
+updated_at: 2026-05-07T20:53:33.567672+00:00
 year: 2017
 doi: "10.1093/mnras/stw2805"
 arxiv_id: "1606.05338"

@@ -1,6 +1,10 @@
+---
+page_type: "parameter"
+title: "Omega_m"
+---
+
 # Omega_m
 
-Type: parameter
 
 ## Evidence from sources
 

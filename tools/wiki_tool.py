@@ -57,6 +57,18 @@ def _update_evidence_page(
 
     if page_path.exists():
         content = page_path.read_text(encoding="utf-8")
+        if not content.lstrip().startswith("---"):
+            # Backfill legacy evidence pages to frontmatter format.
+            lines = content.splitlines()
+            lines = [ln for ln in lines if not ln.strip().lower().startswith("type:")]
+            normalized = "\n".join(lines).strip()
+            content = (
+                "---\n"
+                f'page_type: "{page_type}"\n'
+                f'title: "{_yaml_escape(page_name.strip() or "Untitled")}"\n'
+                "---\n\n"
+                f"{normalized}\n"
+            )
     else:
         title = page_name.strip() or "Untitled"
         content = (

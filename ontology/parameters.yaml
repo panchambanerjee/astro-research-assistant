@@ -1,0 +1,15 @@
+S8:
+  aliases: ["S_8", "sigma8 tension", "weak lensing tension"]
+  definition: "S8 = sigma8 * sqrt(Omega_m / 0.3)"
+  related_observables: ["cosmic shear", "galaxy clustering", "CMB lensing", "cluster counts"]
+
+H0:
+  aliases: ["Hubble constant", "Hubble parameter today"]
+  units: "km/s/Mpc"
+  related_topics: ["Hubble tension", "distance ladder", "BAO", "CMB"]
+
+Omega_m:
+  aliases: ["matter density parameter", "Ωm"]
+
+sigma8:
+  aliases: ["sigma_8", "matter fluctuation amplitude"]

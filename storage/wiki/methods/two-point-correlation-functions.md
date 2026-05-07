@@ -1,6 +1,10 @@
+---
+page_type: "method"
+title: "two-point correlation functions"
+---
+
 # two-point correlation functions
 
-Type: method
 
 ## Evidence from sources
 

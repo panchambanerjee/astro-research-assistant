@@ -1,6 +1,10 @@
+---
+page_type: "concept"
+title: "weak lensing"
+---
+
 # weak lensing
 
-Type: concept
 
 ## Evidence from sources
 

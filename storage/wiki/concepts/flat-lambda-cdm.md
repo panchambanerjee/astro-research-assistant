@@ -1,6 +1,10 @@
+---
+page_type: "concept"
+title: "flat Lambda CDM"
+---
+
 # flat Lambda CDM
 
-Type: concept
 
 ## Evidence from sources
 

@@ -1,0 +1,24 @@
+Planck:
+  type: "CMB satellite"
+  probes: ["CMB temperature", "CMB polarization", "CMB lensing"]
+  related_parameters: ["H0", "Omega_m", "sigma8", "S8"]
+
+DES:
+  type: "optical survey"
+  probes: ["cosmic shear", "galaxy clustering", "supernovae"]
+
+KiDS:
+  type: "weak lensing survey"
+  probes: ["cosmic shear"]
+
+HSC:
+  type: "optical imaging survey"
+  probes: ["cosmic shear", "galaxy clustering"]
+
+DESI:
+  type: "spectroscopic survey"
+  probes: ["BAO", "redshift-space distortions"]
+
+JWST:
+  type: "space telescope"
+  instruments: ["NIRCam", "NIRSpec", "MIRI"]

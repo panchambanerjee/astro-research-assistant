@@ -1,6 +1,10 @@
+---
+page_type: "dataset"
+title: "KiDS-450"
+---
+
 # KiDS-450
 
-Type: dataset
 
 ## Evidence from sources
 

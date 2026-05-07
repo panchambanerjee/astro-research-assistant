@@ -81,6 +81,19 @@ High-level directories:
   - writes source pages under `storage/wiki/sources/` with YAML frontmatter and Obsidian-style links.
   - updates evidence pages under `storage/wiki/concepts/`, `storage/wiki/datasets/`, `storage/wiki/parameters/`, and `storage/wiki/methods/`.
 
+### Ontology
+
+- `ontology/parameters.yaml`:
+  - core parameter entries (e.g. `S8`, `H0`, `Omega_m`, `sigma8`).
+- `ontology/surveys_and_missions.yaml`:
+  - survey/mission metadata (e.g. Planck, DES, KiDS, HSC, DESI, JWST).
+- `ontology/systematics.yaml`:
+  - probe-specific systematic effects (weak lensing, CMB, high-z galaxies).
+- `ontology/cosmology_topics.yaml`:
+  - populated topic ontology (Hubble tension, S8 tension, dark energy evolution, inflation, neutrino cosmology, LSS, modified gravity, reionization, etc.).
+- `ontology/observables.yaml`:
+  - populated observable ontology (CMB TT/EE, CMB lensing, BAO, RSD, SN Ia, cosmic shear, galaxy clustering, cluster counts, standard sirens, Ly-alpha forest, 21cm).
+
 ## Environment Variables
 
 Create a local `.env` file:
@@ -176,8 +189,19 @@ Paper-type multipliers:
   - `storage/wiki/datasets/`
   - `storage/wiki/parameters/`
   - `storage/wiki/methods/`
-- New evidence pages use YAML frontmatter (`page_type`, `title`) and keep an `## Evidence from sources` section.
+- Evidence pages use YAML frontmatter (`page_type`, `title`) and keep an `## Evidence from sources` section.
+- Legacy evidence pages are auto-upgraded to frontmatter format the next time they are updated.
 - Evidence entries are append-only and deduplicated per source bullet.
+
+## Recent Updates
+
+- Added smoke test script for wiki flows: `scripts/test_wiki_tool.py`.
+- Verified idempotency by running the wiki smoke flow multiple times (no duplicate evidence bullets for identical source entries).
+- Added YAML frontmatter for evidence pages (`page_type`, `title`) and auto-upgrade for legacy pages.
+- Switched source page frontmatter timestamp from `created_at` to `updated_at` for MVP semantics.
+- Populated previously empty ontology files:
+  - `ontology/cosmology_topics.yaml`
+  - `ontology/observables.yaml`
 
 ## Operational Notes
 

@@ -1,6 +1,10 @@
+---
+page_type: "parameter"
+title: "sigma8"
+---
+
 # sigma8
 
-Type: parameter
 
 ## Evidence from sources
 

@@ -1,6 +1,10 @@
+---
+page_type: "method"
+title: "Bayesian parameter inference"
+---
+
 # Bayesian parameter inference
 
-Type: method
 
 ## Evidence from sources
 
