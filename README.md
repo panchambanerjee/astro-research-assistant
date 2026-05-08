@@ -19,11 +19,59 @@ Build a multi-agent research workflow that can:
 - Agent scaffolds and prompt files are implemented for topic expansion, paper analysis, synthesis, hypothesis generation, skeptical review, and report compilation.
 - A sequential CrewAI research pipeline is implemented in `crews/research_crew.py` and is ready to consume pre-selected papers from app/CLI.
 
-## Quick Start
+## Quick Start (New User)
+
+### 1) Prerequisites
+
+- Python `3.12+`
+- [`uv`](https://docs.astral.sh/uv/getting-started/installation/)
+
+### 2) Install dependencies
 
 ```bash
 uv sync
-uv run python main.py
+```
+
+### 3) Configure environment
+
+Create `.env` in the repo root:
+
+```bash
+OPENALEX_MAILTO=your_email@example.com
+NASA_ADS_API_KEY=...
+SEMANTIC_SCHOLAR_API_KEY=...
+OPENAI_API_KEY=...
+BRAVE_SEARCH_API_KEY=...
+```
+
+Minimum recommended for first live run:
+- `OPENALEX_MAILTO`
+- `OPENAI_API_KEY`
+
+### 4) Run your first research command
+
+Live retrieval (recommended real run):
+
+```bash
+uv run python main.py research "Dark Energy evolution over time" --max-papers 5
+```
+
+Offline deterministic run (no external retrieval APIs):
+
+```bash
+uv run python main.py research "Dark Energy evolution over time" --max-papers 5 --input-json evals/fixture_papers_dark_energy.json
+```
+
+### 5) Where outputs go
+
+- Report markdown: `reports/<topic-slug>.md`
+- Wiki source pages: `storage/wiki/sources/`
+- Wiki index/log: `storage/wiki/index.md`, `storage/wiki/log.md`
+
+If you only want to see CLI options:
+
+```bash
+uv run python main.py research --help
 ```
 
 ## Repository Layout
@@ -101,6 +149,13 @@ High-level directories:
   - `agents/research_strategist.py`
   - `agents/skeptical_referee.py`
   - `agents/report_compiler.py`
+- What each agent does:
+  - `topic_expander`: expands a user topic into retrieval-oriented queries, aliases, observables, surveys, parameters, and systematics.
+  - `paper_analyzer`: converts each selected paper into structured `PaperAnalysis` fields (question, methods, datasets, constraints, systematics, limitations).
+  - `synthesis_agent`: aggregates multiple paper analyses into a field-level synthesis (consensus, tensions, recurring weaknesses, open problems).
+  - `research_strategist`: proposes concrete, testable research hypotheses grounded in extracted evidence.
+  - `skeptical_referee`: critiques and re-labels hypotheses (`validated`/`plausible`/`rejected`) based on explicit evidence and falsifiability.
+  - `report_compiler`: assembles the final narrative report from analyses, synthesis, and labeled hypotheses.
 - Crew orchestration:
   - `crews/research_crew.py` exposes `build_research_crew(llm) -> Crew`
   - Uses `Process.sequential` with tasks:
@@ -109,6 +164,29 @@ High-level directories:
     3. generate hypotheses
     4. critique hypotheses
     5. compile report
+  - Data flow (high level):
+    1. CLI retrieves/ranks papers (outside crew).
+    2. Crew analyzes selected papers.
+    3. Crew synthesizes cross-paper findings.
+    4. Crew generates and critiques hypotheses.
+    5. Crew compiles the final report text.
+  - Visual flow:
+
+```mermaid
+flowchart TD
+    userTopic[User Topic] --> topicExpansion[Topic Expansion]
+    topicExpansion --> retrieval[Retrieve Papers OpenAlex ArXiv ADS]
+    retrieval --> dedupRank[Deduplicate Enrich Rank Select]
+    dedupRank --> paperPayload[Selected Paper Payload]
+    paperPayload --> analyzeTask[Paper Analyzer]
+    analyzeTask --> synthTask[Synthesis Agent]
+    synthTask --> hypTask[Research Strategist]
+    hypTask --> refereeTask[Skeptical Referee]
+    refereeTask --> reportTask[Report Compiler]
+    reportTask --> reportOut[Final Report Markdown]
+    reportTask --> wikiOut[Wiki Source and Evidence Pages]
+```
+
   - Paper retrieval/ranking/download is intentionally outside the crew (to be handled by app/CLI before kickoff).
 
 ### Ontology
@@ -251,6 +329,19 @@ Use live mode (omit `--input-json`) when you want topic-true retrieval and disco
 
 ```bash
 uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 10
+```
+
+Mode branch (high level):
+
+```mermaid
+flowchart TD
+    runCmd[Research Command] --> modeChoice{Input JSON Provided}
+    modeChoice -->|Yes| fixtureMode[Fixture Mode]
+    modeChoice -->|No| liveMode[Live Mode]
+    fixtureMode --> fixtureLoad[Load Fixture Papers]
+    fixtureLoad --> rankAnalyze[Rank Analyze Crew Report Wiki]
+    liveMode --> retrieval[Retrieve OpenAlex ArXiv ADS]
+    retrieval --> rankAnalyze
 ```
 
 ### Live Retrieval Controls
