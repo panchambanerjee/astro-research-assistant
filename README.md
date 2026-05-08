@@ -1,4 +1,4 @@
-# Astro Research Assistant (CrewAI)
+# Astro Research Assistant
 
 Python project for an astrophysics/cosmology/astronomy research assistant built with CrewAI.
 
