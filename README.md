@@ -2,6 +2,9 @@
 
 Python project for an astrophysics/cosmology/astronomy research assistant built with CrewAI.
 
+<img width="1254" height="1254" alt="image" src="https://github.com/user-attachments/assets/ae9f2a9a-e2fe-4534-89d9-22a2efbf2d9e" />
+
+
 ## Project Goal
 
 Build a multi-agent research workflow that can:
