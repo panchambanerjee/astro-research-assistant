@@ -16,6 +16,11 @@ class FieldSynthesis(BaseModel):
     summary: str = Field(default="", description="Concise synthesis of consensus and tension.")
     consensus_points: list[str] = Field(default_factory=list)
     tensions_or_disagreements: list[str] = Field(default_factory=list)
+    evidence_from_papers: list[str] = Field(default_factory=list)
+    assistant_inference: list[str] = Field(default_factory=list)
+    recurring_systematics: list[str] = Field(default_factory=list)
+    methodological_weaknesses: list[str] = Field(default_factory=list)
+    promising_directions: list[str] = Field(default_factory=list)
     primary_sources: list[PaperIdentity] = Field(
         default_factory=list,
         description="Key papers backing the synthesis (identifiers from metadata APIs).",

@@ -11,6 +11,7 @@ from .paper import (
 from .paper_analysis import PaperAnalysis
 from .report import ResearchReport
 from .synthesis import FieldSynthesis
+from .topic_expansion import TopicExpansion
 
 __all__ = [
     "CitationCounts",
@@ -22,4 +23,5 @@ __all__ = [
     "RankedPaper",
     "ResearchHypothesis",
     "ResearchReport",
+    "TopicExpansion",
 ]

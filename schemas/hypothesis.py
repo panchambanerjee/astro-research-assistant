@@ -36,3 +36,13 @@ class ResearchHypothesis(BaseModel):
         default_factory=list,
         description="Observations or analyses that could rule the hypothesis out.",
     )
+    proposed_test: str | None = None
+    required_data: list[str] = Field(default_factory=list)
+    required_method: list[str] = Field(default_factory=list)
+    falsification_criteria: list[str] = Field(default_factory=list)
+    novelty_score: int | None = Field(default=None, ge=1, le=5)
+    testability_score: int | None = Field(default=None, ge=1, le=5)
+    data_availability_score: int | None = Field(default=None, ge=1, le=5)
+    impact_score: int | None = Field(default=None, ge=1, le=5)
+    difficulty_score: int | None = Field(default=None, ge=1, le=5)
+    already_done_risk: int | None = Field(default=None, ge=1, le=5)

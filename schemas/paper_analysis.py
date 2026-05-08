@@ -13,6 +13,14 @@ class PaperAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     paper: PaperIdentity = Field(default_factory=PaperIdentity)
+    main_question: str | None = Field(
+        default=None,
+        description="Primary scientific question addressed by the paper.",
+    )
+    paper_type: str | None = Field(
+        default=None,
+        description="High-level paper role (e.g., observational_constraint, methodology, review).",
+    )
     observables: list[str] = Field(default_factory=list)
     datasets: list[str] = Field(default_factory=list)
     instruments: list[str] = Field(default_factory=list)
@@ -38,3 +46,7 @@ class PaperAnalysis(BaseModel):
     key_results: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)
+    relation_to_topic: str | None = Field(
+        default=None,
+        description='Relation to user topic; use "not extracted" when unavailable.',
+    )
