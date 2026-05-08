@@ -1,0 +1,85 @@
+{
+  "papers": [
+    {
+      "title": "KiDS-450: cosmological parameter constraints from tomographic weak gravitational lensing",
+      "authors": [
+        "Hildebrandt, H.",
+        "Viola, M.",
+        "Heymans, C."
+      ],
+      "year": 2017,
+      "doi": "10.1093/mnras/stw2805",
+      "arxiv_id": "1606.05338",
+      "semantic_scholar_id": "49f54d9de1cb8e1239d3be1b8ef1ab4f2a0f34a6",
+      "openalex_id": "W2963819174",
+      "journal": "Monthly Notices of the Royal Astronomical Society",
+      "citation_counts": {
+        "semantic_scholar": 760,
+        "openalex": 812,
+        "selected": 812,
+        "selected_source": "openalex"
+      },
+      "datasets": [
+        "KiDS-450"
+      ],
+      "observables": [
+        "cosmic shear",
+        "weak gravitational lensing"
+      ],
+      "parameters": [
+        "S8",
+        "Omega_m",
+        "sigma8"
+      ],
+      "systematics": [
+        "intrinsic alignment",
+        "photometric redshift uncertainty",
+        "shear calibration",
+        "baryonic feedback"
+      ],
+      "abstract": "We present cosmological parameter constraints from tomographic weak gravitational lensing using 450 square degrees of KiDS imaging. The analysis constrains S8, Omega_m, and sigma8, and models intrinsic alignments, photometric redshift uncertainties, shear calibration, and baryonic feedback uncertainties."
+    },
+    {
+      "title": "Dark Energy Survey Year 3 Results: Cosmological Constraints from Cosmic Shear",
+      "authors": [
+        "Amon, A.",
+        "Secco, L. F.",
+        "Troxel, M. A."
+      ],
+      "year": 2022,
+      "arxiv_id": "2105.13549",
+      "doi": "10.1103/PhysRevD.105.023520",
+      "semantic_scholar_id": "ec9501cf680ca3bb74f49fd65da9a4ec621dcdf8",
+      "openalex_id": "W4394697765",
+      "journal": "Physical Review D",
+      "citation_counts": {
+        "semantic_scholar": 245,
+        "openalex": 266,
+        "selected": 266,
+        "selected_source": "openalex"
+      },
+      "datasets": [
+        "DES Y3"
+      ],
+      "observables": [
+        "cosmic shear",
+        "weak lensing two-point functions"
+      ],
+      "parameters": [
+        "S8",
+        "Omega_m",
+        "sigma8"
+      ],
+      "systematics": [
+        "intrinsic alignment",
+        "photometric redshift uncertainty",
+        "shear calibration"
+      ],
+      "abstract": "DES Y3 cosmic shear measurements from tomographic weak lensing constrain S8, Omega_m, and sigma8 while modeling intrinsic alignments, photometric redshift uncertainty, and shear calibration systematics. The analysis compares inferred structure growth with Planck CMB constraints."
+    }
+  ],
+  "extracted_text_by_key": {
+    "10.1093/mnras/stw2805": "KiDS-450 analyzes tomographic weak gravitational lensing and reports constraints on S8, Omega_m, and sigma8 with explicit treatment of intrinsic alignment, photometric redshift uncertainty, shear calibration, and baryonic feedback uncertainty.",
+    "10.1103/PhysRevD.105.023520": "DES Y3 cosmic shear analysis reports updated constraints on S8, Omega_m, and sigma8, modeling intrinsic alignment, photometric redshift uncertainty, and shear calibration while testing consistency with CMB-inferred structure growth amplitude."
+  }
+}

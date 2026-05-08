@@ -1,0 +1,153 @@
+{
+  "papers": [
+    {
+      "title": "A population of red candidate massive galaxies 600 Myr after the Big Bang",
+      "authors": [
+        "Labb\u00e9, I.",
+        "van Dokkum, P.",
+        "Nelson, E."
+      ],
+      "year": 2023,
+      "arxiv_id": "2207.12446",
+      "paper_type": "observational_constraint",
+      "journal": "Nature",
+      "datasets": [
+        "JWST CEERS"
+      ],
+      "observables": [
+        "rest-frame optical photometry",
+        "stellar mass function"
+      ],
+      "parameters": [
+        "stellar mass",
+        "number density"
+      ],
+      "systematics": [
+        "photometric redshift uncertainty",
+        "stellar population synthesis modeling",
+        "dust attenuation modeling"
+      ],
+      "abstract": "JWST CEERS imaging reveals candidate high-redshift galaxies with inferred large stellar masses at early cosmic times. The analysis discusses photometric-redshift and stellar-population-modeling uncertainties that affect inferred mass and redshift."
+    },
+    {
+      "title": "Early results from GLASS-JWST. A census of luminous galaxies at z > 7 from NIRCam",
+      "authors": [
+        "Castellano, M.",
+        "Treu, T.",
+        "Santini, P."
+      ],
+      "year": 2023,
+      "arxiv_id": "2207.09436",
+      "paper_type": "survey_data_release",
+      "datasets": [
+        "GLASS-JWST"
+      ],
+      "observables": [
+        "NIRCam photometry",
+        "UV luminosity function"
+      ],
+      "parameters": [
+        "UV luminosity density",
+        "number density"
+      ],
+      "systematics": [
+        "completeness corrections",
+        "photometric redshift uncertainty",
+        "lensing magnification uncertainty"
+      ],
+      "abstract": "GLASS-JWST NIRCam observations provide a census of luminous high-redshift galaxy candidates. The study highlights sensitivity to selection functions, completeness, and photometric-redshift uncertainties."
+    },
+    {
+      "title": "UNCOVER: A NIRSpec survey of galaxies at z > 8 in the Abell 2744 field",
+      "authors": [
+        "Atek, H.",
+        "Weibel, A.",
+        "Zitrin, A."
+      ],
+      "year": 2024,
+      "paper_type": "observational_constraint",
+      "datasets": [
+        "UNCOVER",
+        "JWST NIRSpec"
+      ],
+      "observables": [
+        "spectroscopic redshift",
+        "emission line fluxes"
+      ],
+      "parameters": [
+        "redshift distribution",
+        "star-formation rate"
+      ],
+      "systematics": [
+        "spectroscopic selection effects",
+        "line-identification ambiguity",
+        "lensing model uncertainty"
+      ],
+      "abstract": "NIRSpec follow-up in the UNCOVER program provides spectroscopic constraints on galaxies at very high redshift. The paper discusses line-identification uncertainties and lensing-model dependence in inferred source properties."
+    },
+    {
+      "title": "CEERS spectroscopy of massive galaxy candidates at high redshift with JWST/NIRSpec",
+      "authors": [
+        "Finkelstein, S. L.",
+        "Bagley, M.",
+        "Arrabal Haro, P."
+      ],
+      "year": 2024,
+      "paper_type": "observational_constraint",
+      "datasets": [
+        "CEERS",
+        "JWST NIRSpec"
+      ],
+      "observables": [
+        "spectroscopic redshift",
+        "continuum and line diagnostics"
+      ],
+      "parameters": [
+        "stellar mass",
+        "stellar age"
+      ],
+      "systematics": [
+        "nebular line contamination",
+        "stellar population modeling assumptions",
+        "AGN contamination"
+      ],
+      "abstract": "JWST/NIRSpec spectroscopy of CEERS high-redshift massive-galaxy candidates tests photometric inferences and refines stellar-mass estimates. The analysis emphasizes systematics from line contamination and SED-model assumptions."
+    },
+    {
+      "title": "The stellar mass density at z > 8 from JWST surveys: implications for early galaxy assembly",
+      "authors": [
+        "Harikane, Y.",
+        "Bouwens, R. J.",
+        "Oesch, P. A."
+      ],
+      "year": 2024,
+      "paper_type": "review",
+      "datasets": [
+        "CEERS",
+        "JADES",
+        "GLASS-JWST"
+      ],
+      "observables": [
+        "stellar mass function",
+        "luminosity function"
+      ],
+      "parameters": [
+        "stellar mass density",
+        "galaxy abundance"
+      ],
+      "systematics": [
+        "cosmic variance",
+        "survey selection function",
+        "photometric redshift uncertainty"
+      ],
+      "abstract": "A synthesis of early JWST survey constraints on stellar mass density at high redshift examines consistency across CEERS, JADES, and GLASS-style selections. The paper discusses cosmic variance, selection effects, and model dependence."
+    }
+  ],
+  "extracted_text_by_key": {
+    "2207.12446": "CEERS candidates suggest unexpectedly large stellar masses at early times, but conclusions depend on photometric-redshift robustness, SED assumptions, and dust modeling.",
+    "2207.09436": "GLASS-JWST high-redshift candidates constrain luminous galaxy abundance; completeness and photometric-redshift systematics remain central.",
+    "UNCOVER: A NIRSpec survey of galaxies at z > 8 in the Abell 2744 field": "NIRSpec spectroscopy confirms subsets of z>8 candidates while highlighting line-identification and lensing-model uncertainties.",
+    "CEERS spectroscopy of massive galaxy candidates at high redshift with JWST/NIRSpec": "Spectroscopic follow-up revises some stellar-mass estimates and assesses contamination/systematic error sources in early massive-galaxy claims.",
+    "The stellar mass density at z > 8 from JWST surveys: implications for early galaxy assembly": "Cross-survey comparison indicates rapid early assembly remains plausible, with quantitative interpretation sensitive to cosmic variance and selection biases."
+  }
+}

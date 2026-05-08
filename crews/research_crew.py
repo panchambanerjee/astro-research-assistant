@@ -61,14 +61,44 @@ def build_research_crew(llm: Any) -> Crew:
 
     analyze_selected_papers = Task(
         description=(
-            "Analyze the selected papers provided at kickoff. "
-            "Produce structured astrophysics-specific analyses for each paper."
+            "Analyze the selected papers.\n\n"
+            "Topic:\n{topic}\n\n"
+            "Selected papers:\n{paper_payload}\n\n"
+            "Return ONLY valid JSON with this exact shape:\n"
+            "{\n"
+            '  "paper_analyses": [\n'
+            "    {\n"
+            '      "paper_title": "...",\n'
+            '      "main_question": "...",\n'
+            '      "paper_type": "...",\n'
+            '      "observables": [],\n'
+            '      "datasets": [],\n'
+            '      "instruments": [],\n'
+            '      "missions": [],\n'
+            '      "parameters": [],\n'
+            '      "redshift_range": "not extracted",\n'
+            '      "wavelength_band": "not extracted",\n'
+            '      "cosmological_model": "not extracted",\n'
+            '      "systematics": [],\n'
+            '      "methods": [],\n'
+            '      "key_results": [],\n'
+            '      "limitations": [],\n'
+            '      "open_questions": [],\n'
+            '      "relation_to_topic": "..."\n'
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            "Rules:\n"
+            "- Extract datasets from titles too (e.g., DES Y3, KiDS-450).\n"
+            "- Topic-expansion terms are retrieval hints only; include datasets/instruments/missions only if explicitly present in the paper's supplied text.\n"
+            "- Extract methods only when explicit in supplied text.\n"
+            "- Extract systematics only when explicit in supplied text.\n"
+            "- Use [] for unknown lists.\n"
+            '- Use "not extracted" only for unknown scalar fields.\n'
+            "- Do not use external memory beyond supplied papers."
         ),
         expected_output=(
-            "A JSON-like list of structured paper analyses with main question, paper type, "
-            "observables, datasets/surveys, instruments/missions, redshift, wavelength/frequency, "
-            "model, constrained parameters, methods, key results, systematics, limitations, "
-            'open questions, and relation to topic. Use "not extracted" where needed.'
+            'Valid JSON object containing key "paper_analyses".'
         ),
         agent=paper_analyzer,
     )
@@ -88,12 +118,37 @@ def build_research_crew(llm: Any) -> Crew:
 
     generate_hypotheses = Task(
         description=(
-            "Generate concrete, testable astrophysics hypotheses grounded in the synthesis and analyzed papers."
+            "Generate hypotheses from structured analyses and synthesis.\n"
+            "Return ONLY valid JSON with this shape:\n"
+            "{\n"
+            '  "hypotheses": [\n'
+            "    {\n"
+            '      "claim": "...",\n'
+            '      "status": "validated | plausible | rejected",\n'
+            '      "supporting_papers": ["..."],\n'
+            '      "evidence_basis": ["..."],\n'
+            '      "proposed_test": "...",\n'
+            '      "required_data": ["..."],\n'
+            '      "required_methods": ["..."],\n'
+            '      "falsification_criteria": "...",\n'
+            '      "novelty_score": 1,\n'
+            '      "testability_score": 1,\n'
+            '      "data_availability_score": 1,\n'
+            '      "impact_score": 1,\n'
+            '      "difficulty_score": 1,\n'
+            '      "already_done_risk": 1,\n'
+            '      "grounding_notes": "..."\n'
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            "Rules:\n"
+            '- A hypothesis can be "validated" only if the key mechanism appears explicitly in extracted paper analyses.\n'
+            '- If mechanism is domain-plausible but not explicit in supplied evidence, mark it "plausible".\n'
+            '- Use "rejected" when evidence is insufficient or claims are unfalsifiable.\n'
+            "- Do not mark validated based on general cosmology knowledge alone."
         ),
         expected_output=(
-            "A list of hypotheses, each with claim, literature motivation, supporting papers, "
-            "proposed test, required data, required method, falsification criteria, and "
-            "scores (novelty/testability/data availability/impact/difficulty/already-done risk, each 1-5)."
+            'Valid JSON object containing key "hypotheses".'
         ),
         agent=research_strategist,
         context=[analyze_selected_papers, synthesize_field],
@@ -101,11 +156,12 @@ def build_research_crew(llm: Any) -> Crew:
 
     critique_hypotheses = Task(
         description=(
-            "Critique the generated hypotheses and keep only robust, evidence-grounded, falsifiable items."
+            "Critique generated hypotheses and return ONLY valid JSON with key 'hypotheses'. "
+            "Each hypothesis must have status in {validated, plausible, rejected}. "
+            "Validated requires explicit mechanism evidence in extracted analyses."
         ),
         expected_output=(
-            "Only validated hypotheses. Remove or revise hypotheses that are vague, unsupported, "
-            "unfalsifiable, already done, disconnected from evidence, or infeasible."
+            "Valid JSON hypotheses list with corrected statuses and grounding notes."
         ),
         agent=skeptical_referee,
         context=[analyze_selected_papers, synthesize_field, generate_hypotheses],
@@ -113,8 +169,26 @@ def build_research_crew(llm: Any) -> Crew:
 
     compile_report = Task(
         description=(
-            "Compile the final research report from selected papers, analyses, synthesis, "
-            "and validated hypotheses."
+            "Compile the final research report.\n\n"
+            "Topic:\n"
+            "{topic}\n\n"
+            "Original selected papers:\n"
+            "{paper_payload}\n\n"
+            "Use the previous task outputs:\n"
+            "- structured analyses\n"
+            "- field synthesis\n"
+            "- status-labeled hypotheses (validated/plausible/rejected)\n\n"
+            "The report must include:\n"
+            "1. Executive summary\n"
+            "2. Selected papers table\n"
+            "3. Per-paper distillation\n"
+            "4. Field synthesis\n"
+            "5. Tensions/disagreements\n"
+            "6. Systematics\n"
+            "7. Hypotheses with explicit status labels\n"
+            "8. Limitations/open questions\n"
+            "9. Bibliography\n\n"
+            "Do not say that papers were not provided. They are included above."
         ),
         expected_output=(
             "A structured final report with executive summary, evidence-grounded conclusions, "

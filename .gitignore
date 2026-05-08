@@ -3,3 +3,14 @@
 .venv/
 __pycache__/
 .pytest_cache/
+
+# Generated runtime artifacts
+reports/
+storage/raw/papers/
+storage/wiki/sources/
+storage/wiki/concepts/
+storage/wiki/datasets/
+storage/wiki/parameters/
+storage/wiki/methods/
+storage/wiki/hypotheses/
+storage/wiki/reports/

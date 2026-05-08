@@ -100,7 +100,7 @@ def _result_to_paper_metadata(result: arxiv.Result) -> PaperMetadata:
 
 
 def _search_raw(query: str, max_results: int) -> Iterable[arxiv.Result]:
-    client = arxiv.Client(page_size=min(max_results, 100), delay_seconds=0.34, num_retries=3)
+    client = arxiv.Client(page_size=min(max_results, 100), delay_seconds=3.0, num_retries=5)
     search = arxiv.Search(
         query=query,
         max_results=max_results,

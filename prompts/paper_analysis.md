@@ -20,3 +20,4 @@ Extract:
 - relation to the user topic
 
 Do not invent numbers. If a constraint is not visible in the text, say "not extracted".
+Topic-expansion terms are retrieval hints only; do not copy surveys/instruments/datasets into paper analysis unless explicitly present in that paper's title/abstract/supplied text.

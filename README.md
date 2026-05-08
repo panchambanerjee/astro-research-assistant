@@ -133,11 +133,13 @@ OPENALEX_MAILTO=your_email@example.com
 NASA_ADS_API_KEY=...
 SEMANTIC_SCHOLAR_API_KEY=...
 OPENAI_API_KEY=...
+BRAVE_SEARCH_API_KEY=...
 ```
 
 Notes:
 - `NASA_ADS_API_KEY` is required for ADS queries.
 - Semantic Scholar can run without an API key, but keyless calls are rate-limited.
+- `BRAVE_SEARCH_API_KEY` is optional and only needed for `--web-expand`.
 - `.env` is gitignored and should never be committed.
 
 ## Tool Smoke Tests
@@ -150,6 +152,158 @@ uv run python tools/arxiv_tool.py "S8 tension weak lensing Planck" --max-results
 uv run python tools/ads_tool.py "S8 tension weak lensing Planck" --max-results 5
 S2_DEBUG=1 uv run python tools/semantic_scholar_tool.py
 ```
+
+Offline fixture mode (no live retrieval APIs):
+
+```bash
+python main.py research "S8 tension between weak lensing and Planck" --max-papers 10 --input-json evals/fixture_papers_s8.json
+```
+
+Fixture JSON format:
+
+```json
+{
+  "papers": [
+    {
+      "title": "KiDS-450 cosmological constraints",
+      "year": 2017,
+      "doi": "10.1093/mnras/stw2805",
+      "arxiv_id": "1606.05338",
+      "abstract": "..."
+    }
+  ],
+  "extracted_text_by_key": {
+    "10.1093/mnras/stw2805": "optional extracted text override"
+  }
+}
+```
+
+Notes:
+- You can also provide a bare JSON list of paper objects.
+- `extracted_text_by_key` is optional and keyed by DOI/arXiv/ADS/OpenAlex/title key used by the CLI.
+- In fixture mode, retrieval APIs are bypassed to validate payload, Crew context, and report/wiki flow offline.
+- A ready-to-run fixture is included at `evals/fixture_papers_s8.json`.
+- A second ready-to-run fixture is included at `evals/fixture_papers_jwst_highz.json`.
+- A third ready-to-run fixture is included at `evals/fixture_papers_dark_energy.json`.
+- By default, fixture mode now validates topic/fixture relevance and exits early on obvious mismatch. Override with `--no-strict-fixture-topic-match` only when intentionally reusing a fixture across topics.
+
+### Fixture Workflow (Important)
+
+`--input-json` is intentionally strict and should be treated as an "offline evidence lock":
+
+- The topic string can change, but the paper evidence will only come from the fixture file.
+- No OpenAlex/arXiv/ADS retrieval runs when fixture mode is active.
+- Ranking and report generation are still executed, but only over fixture papers.
+
+This means topic/fixture mismatch can produce scientifically incoherent reports unless guarded.
+
+#### Topic/Fixture mismatch guard
+
+When fixture mode is enabled, the CLI computes a lightweight keyword-overlap check between:
+- your requested topic
+- fixture paper titles/abstracts
+
+If overlap is too low, the run exits with a clear error and suggestions.
+
+Example mismatch:
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 5 --input-json evals/fixture_papers_s8.json
+```
+
+Expected behavior: exits early with a fixture/topic mismatch message.
+
+To intentionally bypass guardrails (advanced/debug use only):
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 5 --input-json evals/fixture_papers_s8.json --no-strict-fixture-topic-match
+```
+
+#### Recommended fixture commands
+
+S8 fixture:
+
+```bash
+uv run python main.py research "S8 tension between weak lensing and Planck" --max-papers 5 --input-json evals/fixture_papers_s8.json
+```
+
+JWST high-z fixture:
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 5 --input-json evals/fixture_papers_jwst_highz.json
+```
+
+Dark-energy fixture:
+
+```bash
+uv run python main.py research "Dark Energy evolution over time" --max-papers 5 --input-json evals/fixture_papers_dark_energy.json
+```
+
+#### Choosing live mode vs fixture mode
+
+Use fixture mode when you need reproducible offline debugging for:
+- payload shaping,
+- schema parsing,
+- report rendering,
+- wiki update behavior.
+
+Use live mode (omit `--input-json`) when you want topic-true retrieval and discovery:
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 10
+```
+
+### Live Retrieval Controls
+
+To reduce arXiv rate-limit failures in live mode, the CLI now supports three controls:
+
+- arXiv query fanout is intentionally limited to the first canonical query (lower burst pressure).
+- arXiv requests use retry + exponential backoff on HTTP 429 behavior.
+- Source selection flags allow explicit control over retrieval providers.
+
+Examples:
+
+Skip arXiv entirely:
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 10 --skip-arxiv
+```
+
+Use only OpenAlex + ADS (exclude arXiv):
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 10 --sources openalex,ads
+```
+
+Use only arXiv:
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 10 --sources arxiv
+```
+
+Notes:
+- `--sources` applies to live mode only (fixture mode bypasses external retrieval).
+- Valid source values: `openalex`, `arxiv`, `ads`.
+- `--skip-arxiv` takes precedence over including `arxiv` in `--sources`.
+- Fixture papers can include enriched IDs (`doi`, `openalex_id`, `semantic_scholar_id`) and `citation_counts` for more realistic ranking/report behavior.
+
+### Web-Assisted Topic Expansion
+
+You can optionally add a web discovery layer before retrieval:
+
+```bash
+uv run python main.py research "Massive high z galaxies from the JWST" --max-papers 10 --web-expand
+```
+
+Behavior:
+- ontology/rule expansion runs first,
+- optional Brave-based web expansion discovers extra vocabulary (surveys, instruments, systematics, phrase-level query terms),
+- merged expansion drives retrieval query generation,
+- ranking remains deterministic and local (web results are discovery hints, not ranking authority).
+
+If `BRAVE_SEARCH_API_KEY` is missing or web calls fail, the run continues with deterministic expansion.
+
+Dark-energy runs now also include deterministic topic-expansion templates (`w0`, `wa`, CPL, BAO/SNe/CMB combos, Pantheon+/DESI/eBOSS terms) so expansion is not generic for `Dark Energy evolution over time`.
 
 Wiki smoke script:
 
@@ -198,11 +352,23 @@ uv run pytest -m integration -q
 
 ## Deterministic Ranking Summary
 
-`rank_papers` currently combines:
+`rank_papers` now combines:
+- relevance score: weighted topic-phrase relevance (topic-specific terms + penalties),
 - citation score: log-normalized selected citation count,
-- velocity score: citations per year, log-normalized,
+- source confidence score: deterministic metadata-confidence signal,
 - recency score: deterministic age-decay,
-- relevance score: lexical overlap vs topic.
+- paper-type multiplier: review downweight; selected observational/data/method classes upweight.
+
+Canonical scoring blend:
+- `0.50 * relevance + 0.25 * citation + 0.15 * source_confidence + 0.10 * recency`
+
+Recent high-signal scoring blend:
+- `0.50 * relevance + 0.25 * recency + 0.15 * velocity + 0.10 * citation`
+
+For JWST/high-z-style topics, explicit negative terms (e.g. axion/biology-style drift) are penalized in relevance scoring.
+For dark-energy topics, non-cosmology GW discovery papers (e.g. GW150914 binary-black-hole discovery without standard-siren/dark-energy context) receive strong negative relevance penalties.
+
+Canonical selection now applies an additional relevance gate for dark-energy topics to reduce citation-dominated off-topic picks.
 
 Paper-type multipliers:
 - `review` x `0.85`
@@ -225,6 +391,41 @@ Paper-type multipliers:
 
 ## Recent Updates
 
+- Strengthened Crew task contracts in `crews/research_crew.py` to request strict JSON for:
+  - paper analysis extraction (`paper_analyses`)
+  - hypothesis generation (`hypotheses`)
+  - skeptical review output (status-corrected hypotheses)
+- Added explicit hypothesis status rubric: `validated`, `plausible`, `rejected`.
+- Added deterministic topic expansion for S8/weak-lensing topics (Planck, DES, KiDS, HSC, ACT, SPT; key observables/parameters/systematics).
+- Improved bootstrap structured extraction in CLI:
+  - dataset detection from title/text (e.g. DES Y3, KiDS-450),
+  - methods/systematics extraction only when explicit in supplied text,
+  - unknown list fields now default to `[]` (not `["not extracted"]`).
+- Added deterministic structured hypotheses in CLI with evidence-grounding checks:
+  - only marks `validated` when mechanism appears in extracted analyses,
+  - otherwise marks `plausible` with grounding notes.
+- Report rendering improvements:
+  - fixture-aware heading (`Selected Fixture Papers`),
+  - de-duplicated recent list against canonical/primary selected papers,
+  - hypothesis display rank normalization (`Hypothesis 1`, `Hypothesis 2`, ...),
+  - explicit fixture-mode caveat on citation/ranking confidence.
+- Upgraded `evals/fixture_papers_s8.json` with richer abstracts, systematics, methods, IDs, and citation counts for better evidence-grounded offline runs.
+- Added `evals/fixture_papers_jwst_highz.json` as a topic-aligned offline fixture for JWST high-z massive-galaxy workflows.
+- Added strict fixture/topic mismatch guard in CLI (enabled by default), with explicit override flag `--no-strict-fixture-topic-match`.
+- Added live retrieval controls for arXiv rate-limit resilience:
+  - arXiv limited to one canonical query in live mode,
+  - exponential backoff retries for arXiv rate limits,
+  - source flags `--skip-arxiv` and `--sources`.
+- Added deterministic JWST/high-z expansion branch with richer queries, observables, surveys/programs, parameters, and systematics.
+- Added optional web-assisted topic expansion (`--web-expand`) via Brave Search for vocabulary discovery.
+- Added weighted topic relevance filtering before ranking (including negative term penalties) to suppress off-topic canonical selections.
+- Rebalanced ranking to make relevance the dominant signal for canonical and recent-high-signal lists.
+- Added deterministic dark-energy topic expansion branch and GW-specific negative relevance filtering.
+- Added primary/background/off-topic paper-role separation and report section for background/infrastructure papers.
+- Added analysis sanitization to prevent topic-expansion leakage into per-paper datasets/instruments/missions unless explicitly evidenced in paper text.
+- Extended deterministic hypothesis fallback for JWST/high-z topics so structured `hypotheses` no longer stay empty by default.
+- Extended deterministic hypothesis fallback for dark-energy topics and added crew-output hypothesis JSON extraction path before fallback.
+- Added targeted tests for ranking relevance, analysis sanitization, role classification, and JWST structured hypothesis fallback.
 - Added smoke test script for wiki flows: `scripts/test_wiki_tool.py`.
 - Verified idempotency by running the wiki smoke flow multiple times (no duplicate evidence bullets for identical source entries).
 - Added YAML frontmatter for evidence pages (`page_type`, `title`) and auto-upgrade for legacy pages.

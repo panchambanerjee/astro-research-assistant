@@ -1,6 +1,5 @@
-def main():
-    print("Hello from astro-research-assistant!")
+from app.cli import app
 
 
 if __name__ == "__main__":
-    main()
+    app()

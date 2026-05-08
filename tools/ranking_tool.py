@@ -9,6 +9,71 @@ import re
 from schemas.paper import PaperMetadata, RankedPaper
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
+JWST_HIGHZ_TERMS: dict[str, float] = {
+    "jwst": 3.0,
+    "james webb": 3.0,
+    "high redshift": 3.0,
+    "high-z": 3.0,
+    "z >": 2.5,
+    "z~": 1.5,
+    "massive galaxies": 3.0,
+    "massive galaxy": 3.0,
+    "stellar mass": 2.5,
+    "stellar mass density": 3.0,
+    "nircam": 2.5,
+    "nirspec": 2.5,
+    "ceers": 2.5,
+    "jades": 2.5,
+    "glass-jwst": 2.5,
+    "uncover": 2.5,
+    "cosmos-web": 2.0,
+    "quiescent galaxies": 2.0,
+    "luminosity function": 1.5,
+    "stellar mass function": 2.5,
+    "reionization": 1.0,
+}
+NEGATIVE_TERMS: dict[str, float] = {
+    "axion": -5.0,
+    "dark matter only": -1.0,
+    "exoplanet": -4.0,
+    "planetary": -3.0,
+    "cell migration": -8.0,
+    "biology": -8.0,
+    "medicine": -5.0,
+}
+DARK_ENERGY_TERMS: dict[str, float] = {
+    "dark energy": 4.0,
+    "equation of state": 3.0,
+    "w0": 2.5,
+    "wa": 2.5,
+    "wcdm": 2.5,
+    "cpl": 2.0,
+    "rho_de": 2.0,
+    "cosmological constant": 2.0,
+    "lambda": 1.0,
+    "supernova": 2.0,
+    "type ia": 2.0,
+    "sne ia": 2.0,
+    "bao": 2.0,
+    "baryon acoustic": 2.0,
+    "desi": 2.0,
+    "eboss": 2.0,
+    "pantheon": 2.0,
+    "union2": 1.5,
+    "planck": 1.5,
+    "hubble diagram": 2.0,
+    "distance modulus": 1.5,
+    "expansion history": 3.0,
+    "time evolution": 2.0,
+    "dynamical dark energy": 3.5,
+}
+DARK_ENERGY_NEGATIVE_TERMS: dict[str, float] = {
+    "binary black hole": -6.0,
+    "gravitational waves from a binary black hole merger": -8.0,
+    "ligo": -4.0,
+    "gw150914": -8.0,
+    "stellar-mass black hole": -5.0,
+}
 
 
 def _tokenize(text: str | None) -> set[str]:
@@ -66,6 +131,54 @@ def _relevance_score(paper: PaperMetadata, topic: str) -> float:
     return min(1.0, (0.7 * title_overlap) + (0.3 * abstract_overlap))
 
 
+def _paper_text_for_scoring(paper: PaperMetadata) -> str:
+    return " ".join(
+        [
+            paper.title or "",
+            paper.abstract or "",
+            paper.journal or "",
+            paper.venue or "",
+            " ".join(paper.fields_of_study or []),
+            " ".join(paper.arxiv_categories or []),
+        ]
+    ).lower()
+
+
+def topic_relevance_score(
+    paper: PaperMetadata,
+    topic: str,
+    *,
+    extra_negative_terms: list[str] | None = None,
+) -> float:
+    """Weighted topic relevance score with optional negative-term penalties."""
+    topic_l = topic.lower()
+    text = _paper_text_for_scoring(paper)
+
+    score = _relevance_score(paper, topic) * 4.0
+    if any(term in topic_l for term in ("jwst", "high z", "high-z", "high redshift", "massive")):
+        for term, weight in JWST_HIGHZ_TERMS.items():
+            if term in text:
+                score += weight
+    if any(term in topic_l for term in ("dark energy", "w0", "wa", "equation of state", "expansion")):
+        for term, weight in DARK_ENERGY_TERMS.items():
+            if term in text:
+                score += weight
+        for term, penalty in DARK_ENERGY_NEGATIVE_TERMS.items():
+            if term in text:
+                score += penalty
+        if "gravitational wave" in text and "dark energy" not in text and "standard siren" not in text:
+            score -= 6.0
+
+    penalties = dict(NEGATIVE_TERMS)
+    for term in extra_negative_terms or []:
+        penalties.setdefault(term.lower(), -3.0)
+    for term, penalty in penalties.items():
+        if term in text:
+            score += penalty
+
+    return max(0.0, min(1.0, score / 10.0))
+
+
 def _recency_score(paper: PaperMetadata, current_year: int) -> float:
     if paper.year is None:
         return 0.0
@@ -98,6 +211,7 @@ def rank_papers(
     papers: list[PaperMetadata],
     topic: str,
     current_year: int | None = None,
+    negative_terms: list[str] | None = None,
 ) -> list[RankedPaper]:
     """Rank papers deterministically using citation, velocity, recency, and lexical relevance."""
     if not papers:
@@ -114,16 +228,20 @@ def rank_papers(
 
     ranked: list[RankedPaper] = []
     for i, paper in enumerate(papers):
-        relevance_score = _relevance_score(paper, topic)
+        relevance_score = topic_relevance_score(
+            paper,
+            topic=topic,
+            extra_negative_terms=negative_terms,
+        )
         recency_score = _recency_score(paper, current_year)
         source_confidence = _source_confidence_score(paper)
         multiplier = _paper_type_multiplier(paper)
 
         base_score = (
-            (0.35 * citation_scores[i])
-            + (0.25 * velocity_scores[i])
-            + (0.20 * recency_score)
-            + (0.20 * relevance_score)
+            (0.50 * relevance_score)
+            + (0.25 * citation_scores[i])
+            + (0.15 * source_confidence)
+            + (0.10 * recency_score)
         )
         final_score = base_score * multiplier
 
@@ -175,7 +293,12 @@ def select_recent_high_signal_papers(
     min_year = reference_year - max(0, year_window)
 
     recent = [r for r in ranked if (r.metadata.year or 0) >= min_year]
-    recent.sort(key=lambda r: (-r.final_score, r.rank or 10**9))
+    recent.sort(
+        key=lambda r: (
+            -(0.50 * r.relevance_score + 0.25 * r.recency_score + 0.15 * r.velocity_score + 0.10 * r.citation_score),
+            r.rank or 10**9,
+        )
+    )
     selected = [r.model_copy(deep=True) for r in recent[:n]]
     for paper in selected:
         paper.ranking_bucket = "recent_high_signal"

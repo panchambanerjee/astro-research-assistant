@@ -10,4 +10,9 @@ Reject or revise hypotheses that are:
 - not connected to the papers
 - impossible with available data
 
-Return only validated hypotheses.
+Return hypotheses with explicit status labels:
+- validated
+- plausible
+- rejected
+
+Use "validated" only when directly supported by selected evidence and testable.

@@ -3,6 +3,7 @@ from tools.ranking_tool import (
     rank_papers,
     select_canonical_papers,
     select_recent_high_signal_papers,
+    topic_relevance_score,
 )
 
 
@@ -85,3 +86,56 @@ def test_selection_helpers_assign_buckets() -> None:
     assert len(recent) <= 2
     assert all(p.ranking_bucket == "recent_high_signal" for p in recent)
     assert all((p.metadata.year or 0) >= 2023 for p in recent)
+
+
+def test_topic_relevance_penalizes_off_topic_terms() -> None:
+    off_topic = PaperMetadata(
+        title="Axion cosmology constraints from CMB lensing",
+        abstract="axion model constraints in cosmology",
+        citation_counts=CitationCounts(selected=500),
+    )
+    on_topic = PaperMetadata(
+        title="CEERS massive galaxies at high redshift with JWST NIRCam",
+        abstract="jwst high redshift massive galaxies stellar mass density",
+        citation_counts=CitationCounts(selected=40),
+    )
+    topic = "Massive high z galaxies from the JWST"
+    assert topic_relevance_score(on_topic, topic) > topic_relevance_score(off_topic, topic)
+
+
+def test_rank_papers_prefers_topic_relevance_over_generic_high_citation() -> None:
+    generic_high_citation = PaperMetadata(
+        title="Axion cosmology review",
+        abstract="axion cosmology and dark matter only model",
+        year=2017,
+        citation_counts=CitationCounts(selected=2500),
+    )
+    jwst_direct = PaperMetadata(
+        title="A population of red candidate massive galaxies 600 Myr after the Big Bang",
+        abstract="jwst ceers massive galaxies high redshift stellar mass density",
+        year=2023,
+        citation_counts=CitationCounts(selected=120),
+    )
+    ranked = rank_papers(
+        [generic_high_citation, jwst_direct],
+        topic="Massive high z galaxies from the JWST",
+        current_year=2025,
+    )
+    assert ranked[0].metadata.title == jwst_direct.title
+
+
+def test_rank_papers_dark_energy_filters_gw_discovery_bias() -> None:
+    gw = PaperMetadata(
+        title="Observation of Gravitational Waves from a Binary Black Hole Merger",
+        abstract="gw150914 ligo binary black hole merger",
+        year=2016,
+        citation_counts=CitationCounts(selected=5000),
+    )
+    de = PaperMetadata(
+        title="Completed SDSS-IV extended Baryon Oscillation Spectroscopic Survey: Cosmological Implications",
+        abstract="dark energy equation of state constraints from BAO and supernova combinations with Planck",
+        year=2021,
+        citation_counts=CitationCounts(selected=600),
+    )
+    ranked = rank_papers([gw, de], topic="Dark Energy evolution over time", current_year=2025)
+    assert ranked[0].metadata.title == de.title

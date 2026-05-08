@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .paper import PaperIdentity
 
 HypothesisStatus = Literal["draft", "refined", "challenged", "supported", "retired"]
+HypothesisValidationStatus = Literal["validated", "plausible", "rejected"]
 
 
 class ResearchHypothesis(BaseModel):
@@ -26,6 +27,22 @@ class ResearchHypothesis(BaseModel):
         description="Papers that motivate or support the hypothesis (metadata from APIs only).",
     )
     status: HypothesisStatus = "draft"
+    validation_status: HypothesisValidationStatus = "plausible"
+    grounding_notes: str = Field(
+        default="",
+        description=(
+            "How this status was assigned. 'validated' requires mechanism evidence in extracted analyses."
+        ),
+    )
+    evidence_basis: list[str] = Field(
+        default_factory=list,
+        description="Explicit evidence snippets or extracted analysis claims supporting the status.",
+    )
+    display_rank: int | None = Field(
+        default=None,
+        ge=1,
+        description="Display-only hypothesis ordering in final report output.",
+    )
     confidence: float | None = Field(
         default=None,
         ge=0.0,

@@ -1,0 +1,170 @@
+{
+  "papers": [
+    {
+      "title": "Measurements of Omega and Lambda from 42 High-Redshift Supernovae",
+      "authors": [
+        "Perlmutter, S.",
+        "Aldering, G.",
+        "Goldhaber, G."
+      ],
+      "year": 1999,
+      "arxiv_id": "astro-ph/9812133",
+      "paper_type": "observational_constraint",
+      "journal": "The Astrophysical Journal",
+      "datasets": [
+        "High-z Supernova Search Team"
+      ],
+      "observables": [
+        "Type Ia supernova distance modulus",
+        "Hubble diagram"
+      ],
+      "parameters": [
+        "Omega_m",
+        "Omega_Lambda"
+      ],
+      "systematics": [
+        "SN calibration",
+        "selection effects"
+      ],
+      "abstract": "High-redshift Type Ia supernova observations provide evidence for an accelerating expansion and non-zero cosmological constant, constraining Omega_m and Omega_Lambda through distance-redshift relations."
+    },
+    {
+      "title": "Planck 2018 results. VI. Cosmological parameters",
+      "authors": [
+        "Planck Collaboration"
+      ],
+      "year": 2020,
+      "arxiv_id": "1807.06209",
+      "paper_type": "observational_constraint",
+      "journal": "Astronomy & Astrophysics",
+      "datasets": [
+        "Planck"
+      ],
+      "observables": [
+        "CMB anisotropies"
+      ],
+      "parameters": [
+        "w",
+        "Omega_m",
+        "H0"
+      ],
+      "systematics": [
+        "CMB lensing amplitude anomaly"
+      ],
+      "abstract": "Planck CMB measurements provide precision constraints on cosmological parameters and dark energy equation-of-state extensions when combined with BAO and supernova data."
+    },
+    {
+      "title": "Completed SDSS-IV extended Baryon Oscillation Spectroscopic Survey: Cosmological Implications from Two Decades of Spectroscopic Surveys at the Apache Point Observatory",
+      "authors": [
+        "Alam, S.",
+        "Gil-Marin, H.",
+        "Hou, J."
+      ],
+      "year": 2021,
+      "arxiv_id": "2007.08991",
+      "paper_type": "observational_constraint",
+      "journal": "Physical Review D",
+      "datasets": [
+        "SDSS-IV",
+        "eBOSS"
+      ],
+      "observables": [
+        "BAO distance scale",
+        "redshift-space distortions",
+        "galaxy clustering"
+      ],
+      "parameters": [
+        "w0",
+        "wa",
+        "Omega_m"
+      ],
+      "systematics": [
+        "BAO reconstruction systematics"
+      ],
+      "abstract": "Final eBOSS analyses combine BAO and redshift-space distortion measurements to constrain expansion history and dark energy equation-of-state parameters including w0 and wa."
+    },
+    {
+      "title": "The Pantheon+ Analysis: Cosmological Constraints",
+      "authors": [
+        "Brout, D.",
+        "Scolnic, D.",
+        "Popovic, B."
+      ],
+      "year": 2022,
+      "arxiv_id": "2112.03863",
+      "paper_type": "observational_constraint",
+      "journal": "The Astrophysical Journal",
+      "datasets": [
+        "Pantheon+"
+      ],
+      "observables": [
+        "Type Ia supernova distance modulus",
+        "Hubble diagram"
+      ],
+      "parameters": [
+        "w",
+        "w0",
+        "H0"
+      ],
+      "systematics": [
+        "photometric calibration",
+        "host-galaxy mass correction",
+        "Malmquist bias"
+      ],
+      "abstract": "Pantheon+ supernova compilation provides updated cosmological constraints and dark energy equation-of-state bounds, with improved treatment of calibration and sample systematics."
+    },
+    {
+      "title": "DESI 2024 dark energy constraints from baryon acoustic oscillations",
+      "authors": [
+        "DESI Collaboration"
+      ],
+      "year": 2024,
+      "paper_type": "observational_constraint",
+      "datasets": [
+        "DESI"
+      ],
+      "observables": [
+        "BAO distance scale",
+        "galaxy clustering"
+      ],
+      "parameters": [
+        "w0",
+        "wa",
+        "rho_DE(z)"
+      ],
+      "systematics": [
+        "BAO reconstruction systematics",
+        "selection effects"
+      ],
+      "abstract": "Early DESI BAO measurements tighten constraints on expansion history and evolving dark energy models including w0-wa parameterizations."
+    },
+    {
+      "title": "Observation of Gravitational Waves from a Binary Black Hole Merger",
+      "authors": [
+        "Abbott, B. P.",
+        "LIGO Scientific Collaboration",
+        "Virgo Collaboration"
+      ],
+      "year": 2016,
+      "arxiv_id": "1602.03837",
+      "paper_type": "other",
+      "journal": "Physical Review Letters",
+      "observables": [
+        "gravitational-wave strain"
+      ],
+      "parameters": [
+        "binary black hole masses"
+      ],
+      "systematics": [],
+      "abstract": "First direct detection of gravitational waves from a binary black hole merger GW150914 by LIGO."
+    }
+  ],
+  "extracted_text_by_key": {
+    "astro-ph/9812133": "High-redshift Type Ia supernovae constrain Omega_m and Omega_Lambda through distance modulus and Hubble diagram fits, supporting accelerated expansion.",
+    "1807.06209": "Planck 2018 CMB anisotropies combined with BAO and supernovae constrain dark energy equation-of-state extensions and expansion history.",
+    "2007.08991": "Completed eBOSS BAO and RSD analyses constrain w0 and wa and improve dark energy evolution constraints with large-scale structure data.",
+    "2112.03863": "Pantheon+ supernova compilation tightens dark energy equation-of-state constraints with improved photometric calibration and host-mass systematics modeling.",
+    "DESI 2024 dark energy constraints from baryon acoustic oscillations": "DESI BAO measurements sharpen constraints on w0-wa and rho_DE(z) evolution.",
+    "1602.03837": "GW150914 discovery report focuses on binary black hole merger physics and does not provide dark-energy or standard-siren cosmological constraints."
+  }
+}
