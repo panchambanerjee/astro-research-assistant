@@ -16,7 +16,8 @@ Build a multi-agent research workflow that can:
 - Core Pydantic schemas are implemented.
 - Retrieval and enrichment tools are implemented for OpenAlex, arXiv, NASA ADS, and Semantic Scholar.
 - Metadata deduplication, deterministic ranking, PDF handling, and wiki source-page tooling are implemented.
-- Agent and crew orchestration is not implemented yet.
+- Agent scaffolds and prompt files are implemented for topic expansion, paper analysis, synthesis, hypothesis generation, skeptical review, and report compilation.
+- A sequential CrewAI research pipeline is implemented in `crews/research_crew.py` and is ready to consume pre-selected papers from app/CLI.
 
 ## Quick Start
 
@@ -49,6 +50,9 @@ High-level directories:
   - `PaperAnalysis` with astrophysics fields (observables, datasets, instruments, missions, parameters, redshift, wavelength, systematics, methods, limitations, open questions).
 - `schemas/hypothesis.py`, `schemas/synthesis.py`, `schemas/report.py`
   - structured outputs for hypothesis generation, synthesis, and final report packaging.
+- `schemas/topic_expansion.py`
+  - `TopicExpansion` schema for canonical queries, aliases, observables, surveys, parameters, systematics, subfields, and arXiv categories.
+- `schemas/paper_analysis.py`, `schemas/hypothesis.py`, and `schemas/synthesis.py` include extended fields aligned to current agent outputs.
 
 ### Tools
 
@@ -80,6 +84,32 @@ High-level directories:
   - `create_source_page(...)`, `write_source_page(...)`, `update_index(...)`, `append_log(...)`, `slugify_title(...)`
   - writes source pages under `storage/wiki/sources/` with YAML frontmatter and Obsidian-style links.
   - updates evidence pages under `storage/wiki/concepts/`, `storage/wiki/datasets/`, `storage/wiki/parameters/`, and `storage/wiki/methods/`.
+
+### Agents and Crew
+
+- Prompt files:
+  - `prompts/topic_expansion.md`
+  - `prompts/paper_analysis.md`
+  - `prompts/synthesis.md`
+  - `prompts/hypothesis_generation.md`
+  - `prompts/skeptical_review.md`
+  - `prompts/report_compilation.md`
+- Agent scaffolds:
+  - `agents/topic_expander.py`
+  - `agents/paper_analyzer.py`
+  - `agents/synthesis_agent.py`
+  - `agents/research_strategist.py`
+  - `agents/skeptical_referee.py`
+  - `agents/report_compiler.py`
+- Crew orchestration:
+  - `crews/research_crew.py` exposes `build_research_crew(llm) -> Crew`
+  - Uses `Process.sequential` with tasks:
+    1. analyze selected papers
+    2. synthesize field
+    3. generate hypotheses
+    4. critique hypotheses
+    5. compile report
+  - Paper retrieval/ranking/download is intentionally outside the crew (to be handled by app/CLI before kickoff).
 
 ### Ontology
 
@@ -202,6 +232,9 @@ Paper-type multipliers:
 - Populated previously empty ontology files:
   - `ontology/cosmology_topics.yaml`
   - `ontology/observables.yaml`
+- Added topic expansion schema (`schemas/topic_expansion.py`) and expanded analysis/synthesis/hypothesis schemas for agent outputs.
+- Added agent prompt files and typed agent scaffolds.
+- Added sequential CrewAI pipeline in `crews/research_crew.py`.
 
 ## Operational Notes
 
