@@ -19,3 +19,13 @@ def test_topic_profiler_jwst() -> None:
     assert "NIRCam" in profile.instruments
     assert "NIRSpec" in profile.instruments
     assert "stellar mass" in profile.parameters
+
+
+def test_topic_profiler_galaxy_clusters_and_ml() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    assert profile.primary_domain == "galaxy_clusters"
+    assert "eROSITA" in profile.surveys_or_missions or "DES" in profile.surveys_or_missions
+    assert "machine learning" in profile.methods
+    assert "machine_learning" in (profile.matched_terms.get("method_overlays") or [])
+    assert profile.expected_paper_types
+    assert profile.profile_confidence is not None and profile.profile_confidence >= 0.35

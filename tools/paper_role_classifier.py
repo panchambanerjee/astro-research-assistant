@@ -51,6 +51,36 @@ _BACKGROUND_TERMS = (
 _METHOD_INSTRUMENT_TERMS = ("nircam", "nirspec", "miri", "niriss", "instrumental", "pipeline", "calibration")
 
 
+def _extra_direct_terms_from_profile(profile: TopicProfile) -> tuple[str, ...]:
+    """When the topic expects method-style papers, treat ML / pipeline language as direct-evidence cues."""
+    types_l = {(t or "").strip().lower() for t in profile.expected_paper_types}
+    if not types_l:
+        return ()
+    want_ml = bool(
+        types_l
+        & {
+            "method",
+            "simulation calibration",
+            "observational pipeline",
+            "catalog construction",
+            "inference",
+        }
+    )
+    if not want_ml:
+        return ()
+    return (
+        "machine learning",
+        "deep learning",
+        "neural network",
+        "random forest",
+        "gaussian process",
+        "classification",
+        "regression",
+        "emulator",
+        "simulation-based inference",
+    )
+
+
 def _paper_key(paper: PaperMetadata) -> str:
     return paper.doi or paper.arxiv_id or paper.ads_bibcode or paper.openalex_id or paper.title or "unknown"
 
@@ -71,7 +101,11 @@ def classify_paper_role(paper: PaperMetadata, profile: TopicProfile, topic: str)
     text = " ".join([paper.title or "", paper.abstract or "", paper.journal or "", paper.venue or ""]).lower()
     relevance = topic_relevance_score(paper, topic=topic, topic_profile=profile)
 
-    direct_terms = _merge_role_hints(profile, "direct_evidence", _DIRECT_EVIDENCE_TERMS)
+    direct_terms = _merge_role_hints(
+        profile,
+        "direct_evidence",
+        (*_DIRECT_EVIDENCE_TERMS, *_extra_direct_terms_from_profile(profile)),
+    )
     theory_terms = _merge_role_hints(profile, "theory_interpretation", _THEORY_TERMS)
     background_terms = _merge_role_hints(profile, "background_review", _BACKGROUND_TERMS)
     method_terms = _merge_role_hints(profile, "method_or_instrument", _METHOD_INSTRUMENT_TERMS)
@@ -116,6 +150,7 @@ class SelectionPolicy(BaseModel):
     min_direct_evidence: int = 3
     max_background: int = 1
     max_theory_interpretation: int = 1
+    max_method_or_instrument: int = 1
     exclude_off_topic: bool = True
 
 
@@ -138,12 +173,44 @@ def default_selection_policy(max_papers: int) -> SelectionPolicy:
             min_direct_evidence=1,
             max_background=1,
             max_theory_interpretation=1,
+            max_method_or_instrument=1,
         )
     return SelectionPolicy(
         max_papers=cap,
         min_direct_evidence=min(3, max(1, cap - 2)),
         max_background=1,
         max_theory_interpretation=1,
+        max_method_or_instrument=1,
+    )
+
+
+def selection_policy_from_profile(profile: TopicProfile, max_papers: int) -> SelectionPolicy:
+    """
+    Start from default quotas, then widen method/theory caps when the profile expects
+    method, pipeline, calibration, or inference-style papers (e.g. ML method overlays).
+    """
+    base = default_selection_policy(max_papers)
+    types_l = {(t or "").strip().lower() for t in profile.expected_paper_types if (t or "").strip()}
+    max_method = base.max_method_or_instrument
+    max_theory = base.max_theory_interpretation
+
+    methodish = types_l & {
+        "method",
+        "simulation calibration",
+        "observational pipeline",
+        "catalog construction",
+    }
+    if methodish:
+        max_method = min(max(base.max_papers // 2, 2), max(2, max_method))
+
+    if "inference" in types_l:
+        max_theory = min(2, max_theory + 1)
+
+    return base.model_copy(
+        update={
+            "max_method_or_instrument": max_method,
+            "max_theory_interpretation": max_theory,
+        }
     )
 
 
@@ -218,13 +285,13 @@ def select_primary_ranked_with_quotas(
         add_unique(r)
     for r in theories[: pol.max_theory_interpretation]:
         add_unique(r)
-    for r in methods[: pol.max_background]:
+    for r in methods[: pol.max_method_or_instrument]:
         add_unique(r)
     for r in directs[pol.min_direct_evidence :]:
         add_unique(r)
     for r in theories[pol.max_theory_interpretation :]:
         add_unique(r)
-    for r in methods[pol.max_background :]:
+    for r in methods[pol.max_method_or_instrument :]:
         add_unique(r)
     for r in sorted(pool_thresh, key=rk):
         add_unique(r)

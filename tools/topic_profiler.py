@@ -7,6 +7,7 @@ from pathlib import Path
 from schemas.topic_profile import ConditionalNegativeBlock, ProfileSource, TopicProfile
 from tools.ontology_loader import (
     DomainOntology,
+    MethodOverlay,
     ProfileOverlay,
     conditional_blocks_to_pydantic,
     load_astro_ontology,
@@ -88,6 +89,19 @@ def _active_domain_names(primary_name: str | None, domains: list[DomainOntology]
     return names
 
 
+def _cluster_topic(topic_l: str) -> bool:
+    return "galaxy cluster" in topic_l or "galaxy clusters" in topic_l
+
+
+def _method_overlay_applies(topic_l: str, ovl: MethodOverlay) -> tuple[bool, float]:
+    if not ovl.match_any:
+        return False, 0.0
+    if not any(tok in topic_l for tok in ovl.match_any):
+        return False, 0.0
+    boost = sum(0.04 for b in ovl.match_boost_if if b in topic_l)
+    return True, boost
+
+
 def _overlay_applies(
     topic_l: str,
     ovl: ProfileOverlay,
@@ -141,8 +155,37 @@ def build_topic_profile(
                 if hits:
                     matched_terms[name] = _dedupe_preserve(hits)
 
+        if _cluster_topic(topic_l):
+            gc_entry = next((t for t in scored if t[1] == "galaxy_clusters"), None)
+            if gc_entry and gc_entry[0] > 0 and primary_name == "galaxy_formation":
+                primary_name = "galaxy_clusters"
+                matched_terms.pop("galaxy_formation", None)
+                gc_dom = gc_entry[2]
+                others = [d for d in active_domains if d.name not in ("galaxy_clusters", "galaxy_formation")]
+                active_domains = [gc_dom, *others]
+                matched_terms["galaxy_clusters"] = _dedupe_preserve(gc_entry[3])
+
     if not active_domains:
-        if any(t in topic_l for t in ("jwst", "galaxy", "redshift", "stellar mass", "massive", "early galaxies")):
+        gc = onto.domains.get("galaxy_clusters")
+        if gc and _cluster_topic(topic_l):
+            active_domains = [gc]
+            primary_name = "galaxy_clusters"
+            _, hits = _domain_match_score(topic_l, gc)
+            matched_terms["galaxy_clusters"] = _dedupe_preserve(hits)
+        elif any(
+            t in topic_l
+            for t in (
+                "jwst",
+                "james webb",
+                "redshift",
+                "stellar mass",
+                "massive",
+                "early galaxies",
+                "high redshift",
+                "high-z",
+                "high z",
+            )
+        ):
             gd = onto.domains.get("galaxy_formation")
             if gd:
                 active_domains = [gd]
@@ -175,7 +218,7 @@ def build_topic_profile(
             _, hits = _domain_match_score(topic_l, cd)
             if hits:
                 matched_terms["cosmology"] = _dedupe_preserve(matched_terms.get("cosmology", []) + hits)
-    elif is_jwst_topic:
+    elif is_jwst_topic and not _cluster_topic(topic_l):
         gd = onto.domains.get("galaxy_formation")
         if gd:
             if gd not in active_domains:
@@ -187,6 +230,19 @@ def build_topic_profile(
                     matched_terms.get("galaxy_formation", []) + ghits
                 )
 
+    best_domain_score = (
+        next((s for s, n, _, _ in scored if n == primary_name), scored[0][0] if scored else 0.0)
+        if primary_name and scored
+        else (scored[0][0] if scored else 0.0)
+    )
+    n_domain_matched = sum(len(matched_terms[k]) for k in matched_terms if k in onto.domains)
+    pre_conf = min(1.0, 0.18 + 0.075 * max(0.0, best_domain_score) + 0.028 * max(0, n_domain_matched))
+    apply_profile_overlays = pre_conf >= 0.35
+    if not apply_profile_overlays and len(active_domains) > 1:
+        primary_dom = next((d for d in active_domains if d.name == primary_name), active_domains[0])
+        active_domains = [primary_dom]
+        matched_terms = {k: v for k, v in matched_terms.items() if k == primary_name or k not in onto.domains}
+
     vocab = _merge_domain_vocab(active_domains)
     allow_terms = merged_conditional_allow_terms(active_domains)
     rw = merge_relevance_weights(onto.relevance_weights, active_domains)
@@ -196,25 +252,44 @@ def build_topic_profile(
 
     overlays_hit: list[str] = []
     overlay_boost = 0.0
-    for oname, ovl in onto.overlays.items():
-        applies, boost = _overlay_applies(topic_l, ovl, active_names)
-        if applies:
-            overlays_hit.append(oname)
-            overlay_boost += boost
-            vocab["observables"] = _dedupe_preserve(vocab["observables"] + ovl.observables)
-            vocab["surveys_or_missions"] = _dedupe_preserve(vocab["surveys_or_missions"] + ovl.surveys)
-            vocab["parameters"] = _dedupe_preserve(vocab["parameters"] + ovl.parameters)
-            vocab["systematics"] = _dedupe_preserve(vocab["systematics"] + ovl.systematics)
-            vocab["arxiv_categories"] = _dedupe_preserve(vocab["arxiv_categories"] + ovl.arxiv_categories)
+    if apply_profile_overlays:
+        for oname, ovl in onto.overlays.items():
+            applies, boost = _overlay_applies(topic_l, ovl, active_names)
+            if applies:
+                overlays_hit.append(oname)
+                overlay_boost += boost
+                vocab["observables"] = _dedupe_preserve(vocab["observables"] + ovl.observables)
+                vocab["surveys_or_missions"] = _dedupe_preserve(vocab["surveys_or_missions"] + ovl.surveys)
+                vocab["parameters"] = _dedupe_preserve(vocab["parameters"] + ovl.parameters)
+                vocab["systematics"] = _dedupe_preserve(vocab["systematics"] + ovl.systematics)
+                vocab["arxiv_categories"] = _dedupe_preserve(vocab["arxiv_categories"] + ovl.arxiv_categories)
     if overlays_hit:
         matched_terms["profile_overlays"] = overlays_hit
+
+    method_overlay_names: list[str] = []
+    expected_paper_types: list[str] = []
+    method_overlay_boost = 0.0
+    for mname, movl in onto.method_overlays.items():
+        applies, boost = _method_overlay_applies(topic_l, movl)
+        if applies:
+            method_overlay_names.append(mname)
+            method_overlay_boost += boost
+            vocab["methods"] = _dedupe_preserve(vocab["methods"] + movl.methods)
+            expected_paper_types.extend(movl.expected_paper_types)
+    if method_overlay_names:
+        matched_terms["method_overlays"] = method_overlay_names
 
     subdomains = [t[1] for t in scored[1:] if t[0] >= 1.0 and t[1] != primary_name]
 
     n_matched = sum(len(v) for v in matched_terms.values())
     confidence = min(
         1.0,
-        0.18 + 0.07 * len(overlays_hit) + overlay_boost + 0.035 * max(1, n_matched),
+        0.18
+        + 0.07 * len(overlays_hit)
+        + overlay_boost
+        + method_overlay_boost
+        + 0.08 * len(method_overlay_names)
+        + 0.035 * max(1, n_matched),
     )
 
     return TopicProfile(
@@ -235,6 +310,7 @@ def build_topic_profile(
         negative_topics=vocab["negative_topics"],
         conditional_negatives=vocab["conditional_negatives"],
         conditional_allow_terms=_dedupe_preserve(allow_terms),
+        expected_paper_types=_dedupe_preserve(expected_paper_types),
         matched_terms={k: _dedupe_preserve(v) for k, v in matched_terms.items() if v},
         profile_confidence=confidence,
     )

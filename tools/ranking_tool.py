@@ -150,6 +150,68 @@ def _rw(weights: dict[str, float], key: str, default: float) -> float:
     return float(v) if v is not None else default
 
 
+# Substrings in paper metadata that align with TopicProfile.expected_paper_types (ontology-driven hints).
+_EXPECTED_TYPE_PHRASES: dict[str, tuple[str, ...]] = {
+    "method": (
+        "machine learning",
+        "deep learning",
+        "neural network",
+        "random forest",
+        "gaussian process",
+        "convolutional",
+        "classification",
+        "regression",
+        "simulation-based inference",
+    ),
+    "simulation calibration": (
+        "hydrodynamical simulation",
+        "cosmological simulation",
+        "numerical simulation",
+        "calibration",
+        "emulator",
+        "subgrid",
+        "mock catalog",
+        "hydro simulation",
+    ),
+    "observational pipeline": (
+        "data reduction",
+        "pipeline",
+        "photometric pipeline",
+        "survey pipeline",
+        "data processing",
+    ),
+    "catalog construction": (
+        "catalog construction",
+        "source catalog",
+        "object detection",
+        "cluster catalog",
+        "galaxy catalog",
+    ),
+    "inference": (
+        "bayesian",
+        "mcmc",
+        "likelihood",
+        "posterior",
+        "monte carlo",
+        "parameter constraints",
+    ),
+}
+
+
+def _expected_paper_type_bonus(text: str, expected_types: list[str]) -> float:
+    """Small raw-score bonus before /14 normalization when paper text matches profile paper-type hints."""
+    if not expected_types:
+        return 0.0
+    tl = text.lower()
+    raw_bonus = 0.0
+    for et in expected_types:
+        key = (et or "").strip().lower()
+        phrases = _EXPECTED_TYPE_PHRASES.get(key, ())
+        if phrases and any(p in tl for p in phrases):
+            raw_bonus += 0.45
+    return min(2.25, raw_bonus)
+
+
 def profile_relevance_score(paper: PaperMetadata, profile: TopicProfile) -> float:
     """Deterministic relevance from TopicProfile vocabulary and conditional negatives."""
     text = _paper_text_for_scoring(paper)
@@ -195,6 +257,8 @@ def profile_relevance_score(paper: PaperMetadata, profile: TopicProfile) -> floa
 
     if "gravitational wave" in text and profile.primary_domain == "cosmology" and not rescued:
         raw -= 5.5
+
+    raw += _expected_paper_type_bonus(text, profile.expected_paper_types)
 
     return max(0.0, min(1.0, raw / 14.0))
 

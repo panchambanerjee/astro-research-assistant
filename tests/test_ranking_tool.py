@@ -166,3 +166,26 @@ def test_standard_siren_profile_relevance_allowed() -> None:
     )
     profile = build_topic_profile("Dark Energy evolution over time")
     assert profile_relevance_score(siren, profile) > 0.35
+
+
+def test_expected_paper_types_boost_when_paper_text_aligns() -> None:
+    """Papers whose text matches ontology-driven expected_paper_types get a small relevance bonus."""
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    assert profile.expected_paper_types
+
+    ml_paper = PaperMetadata(
+        title="Deep learning for cluster detection",
+        abstract="we train a convolutional neural network for classification of galaxy clusters in survey data",
+        citation_counts=CitationCounts(selected=40),
+        doi="10.1000/ml.1",
+    )
+    plain = PaperMetadata(
+        title="Analytical model of cluster profiles",
+        abstract="analytic density profile model without data-driven methods",
+        citation_counts=CitationCounts(selected=40),
+        doi="10.1000/plain.1",
+    )
+
+    stripped = profile.model_copy(update={"expected_paper_types": []})
+    assert profile_relevance_score(ml_paper, profile) >= profile_relevance_score(ml_paper, stripped)
+    assert profile_relevance_score(ml_paper, profile) > profile_relevance_score(plain, profile)

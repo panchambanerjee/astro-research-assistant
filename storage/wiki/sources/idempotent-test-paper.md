@@ -2,7 +2,7 @@
 title: "Idempotent Test Paper"
 slug: idempotent-test-paper
 page_type: source
-updated_at: 2026-05-13T16:48:55.072063+00:00
+updated_at: 2026-05-13T17:22:39.600764+00:00
 year: 2024
 doi: null
 arxiv_id: null

@@ -28,8 +28,8 @@ from tools.metadata_resolver import deduplicate_papers
 from tools.openalex_tool import search_openalex_works
 from tools.pdf_tool import download_pdf, extract_text_from_pdf
 from tools.paper_role_classifier import (
-    default_selection_policy,
     select_primary_ranked_with_quotas,
+    selection_policy_from_profile,
 )
 from tools.query_generator import topic_profile_to_expansion
 from tools.ranking_tool import rank_papers, select_recent_high_signal_papers, topic_relevance_score
@@ -224,6 +224,16 @@ def _term_in_text(term: str, text_lower: str) -> bool:
     return term.lower() in text_lower
 
 
+def _survey_or_dataset_in_text(term: str, text_lower: str) -> bool:
+    """Match survey codes without substring false positives (e.g. DES inside 'addresses')."""
+    t = (term or "").strip().lower()
+    if not t:
+        return False
+    if " " in t or "-" in t or len(t) >= 5:
+        return t in text_lower
+    return re.search(rf"(?<![a-z0-9]){re.escape(t)}(?![a-z0-9])", text_lower) is not None
+
+
 def _extract_terms(terms: list[str] | tuple[str, ...], text_lower: str) -> list[str]:
     return sorted({term for term in terms if _term_in_text(term, text_lower)})
 
@@ -233,7 +243,7 @@ def _extract_datasets_from_paper(paper: PaperMetadata, text_lower: str) -> list[
     merged = f"{title_lower}\n{text_lower}"
     seeded = set(paper.datasets)
     for term in DATASET_HINTS:
-        if term.lower() in merged:
+        if _survey_or_dataset_in_text(term, merged):
             seeded.add(term)
     return sorted(seeded)
 
@@ -752,15 +762,10 @@ def _bootstrap_analysis(
     evidence_text = _paper_evidence_text(paper, extracted_text)
     metadata_text = _paper_metadata_text(paper)
 
-    observables = sorted({*paper.observables, *[o for o in expansion.observables if o.lower() in metadata_text]})
+    observables = sorted(set(paper.observables))
     datasets = sorted({*_extract_datasets_from_paper(paper, metadata_text)})
-    parameters = sorted({*paper.parameters, *[p for p in expansion.parameters if p.lower() in metadata_text]})
-    systematics = sorted(
-        {
-            *_extract_systematics_from_text(evidence_text),
-            *[s for s in expansion.systematics if s.lower() in evidence_text],
-        }
-    )
+    parameters = sorted(set(paper.parameters))
+    systematics = sorted(set(_extract_systematics_from_text(evidence_text)))
     methods = sorted({*_extract_methods_from_text(evidence_text)})
     instruments = sorted({*paper.instruments, *_extract_instruments_from_text(metadata_text)})
     key_results: list[str] = []
@@ -1379,7 +1384,7 @@ def research(
         negative_terms=expansion.negative_terms,
         topic_profile=topic_profile,
     )
-    pol = default_selection_policy(max_papers)
+    pol = selection_policy_from_profile(topic_profile, max_papers)
     primary_cut = (
         max(relevance_threshold, 0.35) if topic_profile.primary_domain == "cosmology" else relevance_threshold
     )
@@ -1410,7 +1415,8 @@ def research(
         f"- Primary relevance cutoff: {primary_cut}",
         (
             f"- Selection policy: max_papers={pol.max_papers}, min_direct_evidence={pol.min_direct_evidence}, "
-            f"max_theory={pol.max_theory_interpretation}, max_background_slot={pol.max_background}"
+            f"max_theory={pol.max_theory_interpretation}, max_method_or_instrument={pol.max_method_or_instrument}, "
+            f"max_background_slot={pol.max_background}"
         ),
     ]
     if flat_matches:

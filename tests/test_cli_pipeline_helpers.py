@@ -133,3 +133,22 @@ def test_no_profile_leakage_to_paper_analysis() -> None:
     )
     assert "DES" not in analysis.datasets
     assert "KiDS" not in analysis.datasets
+
+
+def test_dataset_hints_do_not_match_substrings() -> None:
+    """Short survey tokens must not match inside unrelated words (e.g. DES in 'addresses')."""
+    paper = PaperMetadata(
+        title="Galaxy cluster miscentering and projection effects",
+        abstract="This work addresses systematic biases in cluster mass estimation.",
+    )
+    profile = build_topic_profile("S8 tension between weak lensing and Planck")
+    from tools.query_generator import topic_profile_to_expansion
+
+    expansion = topic_profile_to_expansion(profile)
+    analysis = bootstrap_paper_analysis(
+        paper=paper,
+        topic="S8 tension between weak lensing and Planck",
+        extracted_text="",
+        expansion=expansion,
+    )
+    assert "DES" not in analysis.datasets

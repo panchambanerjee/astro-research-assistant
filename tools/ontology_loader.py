@@ -45,6 +45,19 @@ class DomainOntology:
 
 
 @dataclass
+class MethodOverlay:
+    """Cross-cutting method layer (e.g. ML) applied when topic mentions methods, not a science domain."""
+
+    name: str
+    description: str = ""
+    match_any: list[str] = field(default_factory=list)
+    match_boost_if: list[str] = field(default_factory=list)
+    methods: list[str] = field(default_factory=list)
+    expected_paper_types: list[str] = field(default_factory=list)
+    canonical_queries: list[str] = field(default_factory=list)
+
+
+@dataclass
 class ProfileOverlay:
     """Reusable profile refinement when match rules hit (config-driven, not code branches)."""
 
@@ -65,6 +78,7 @@ class ProfileOverlay:
 class AstroOntology:
     domains: dict[str, DomainOntology]
     overlays: dict[str, ProfileOverlay]
+    method_overlays: dict[str, MethodOverlay] = field(default_factory=dict)
     relevance_weights: dict[str, float] = field(default_factory=dict)
 
 
@@ -169,12 +183,37 @@ def _parse_profile_overlays(raw: Any) -> dict[str, ProfileOverlay]:
     return overlays
 
 
+def _parse_method_overlays(raw: Any) -> dict[str, MethodOverlay]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, MethodOverlay] = {}
+    for name, block in raw.items():
+        if not isinstance(block, dict):
+            continue
+        match_any, boost_if = _parse_match_any_boost(block)
+        out[str(name)] = MethodOverlay(
+            name=str(name),
+            description=str(block.get("description") or "").strip(),
+            match_any=match_any,
+            match_boost_if=boost_if,
+            methods=_as_str_list(block.get("methods")),
+            expected_paper_types=_as_str_list(block.get("expected_paper_types")),
+            canonical_queries=_as_str_list(block.get("canonical_queries")),
+        )
+    return out
+
+
 def load_astro_ontology(path: Path | None = None) -> AstroOntology:
     """Load unified astro ontology from YAML."""
     root = path or Path(__file__).resolve().parents[1] / "config" / "astro_ontology.yaml"
     data = yaml.safe_load(root.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        return AstroOntology(domains={}, overlays={}, relevance_weights=dict(_DEFAULT_RELEVANCE_WEIGHTS))
+        return AstroOntology(
+            domains={},
+            overlays={},
+            method_overlays={},
+            relevance_weights=dict(_DEFAULT_RELEVANCE_WEIGHTS),
+        )
 
     global_rw = {**_DEFAULT_RELEVANCE_WEIGHTS, **_parse_float_dict(data.get("relevance_weights"))}
 
@@ -189,8 +228,14 @@ def load_astro_ontology(path: Path | None = None) -> AstroOntology:
     if raw_overlays is None:
         raw_overlays = data.get("topic_overlays")
     overlays = _parse_profile_overlays(raw_overlays)
+    method_overlays = _parse_method_overlays(data.get("method_overlays"))
 
-    return AstroOntology(domains=domains, overlays=overlays, relevance_weights=global_rw)
+    return AstroOntology(
+        domains=domains,
+        overlays=overlays,
+        method_overlays=method_overlays,
+        relevance_weights=global_rw,
+    )
 
 
 def merge_relevance_weights(

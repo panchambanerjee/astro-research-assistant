@@ -27,6 +27,33 @@ def topic_profile_to_expansion(profile: TopicProfile, ontology_path: Path | None
         if ovl:
             canonical_queries.update(ovl.canonical_queries)
 
+    method_overlay_names = profile.matched_terms.get("method_overlays") or []
+    for mname in method_overlay_names:
+        movl = onto.method_overlays.get(mname)
+        if movl:
+            canonical_queries.update(movl.canonical_queries)
+
+    topic_lower = profile.original_topic.lower()
+    if profile.primary_domain == "galaxy_clusters" and "machine_learning" in method_overlay_names:
+        canonical_queries.update(
+            {
+                '"galaxy clusters" "machine learning"',
+                '"cluster cosmology" "machine learning"',
+                '"eROSITA" "galaxy clusters" "machine learning"',
+                '"BCG" "machine learning" "galaxy clusters"',
+                '"intracluster light" "machine learning"',
+                '"cluster mass" "machine learning"',
+                '"hydrodynamical simulations" "galaxy clusters" "machine learning"',
+            }
+        )
+    elif "machine_learning" in method_overlay_names and "cluster" in topic_lower:
+        canonical_queries.update(
+            {
+                '"galaxy clusters" "machine learning"',
+                '"cluster cosmology" "machine learning"',
+            }
+        )
+
     negative_terms = sorted({n.lower() for n in profile.negative_topics if n})
 
     subfield_parts = {p for p in profile.subdomains if p}

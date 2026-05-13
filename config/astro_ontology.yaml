@@ -125,6 +125,129 @@ domains:
           - luminosity distance
           - cosmological constraints
 
+  galaxy_clusters:
+    arxiv_categories:
+      - astro-ph.CO
+      - astro-ph.GA
+    aliases:
+      - galaxy cluster
+      - galaxy clusters
+      - cluster cosmology
+      - intracluster medium
+      - icm
+      - brightest cluster galaxy
+      - bcg
+      - intracluster light
+      - icl
+      - cluster mass
+      - cluster abundance
+    probes:
+      - X-ray
+      - Sunyaev-Zel'dovich
+      - SZ effect
+      - weak lensing
+      - optical richness
+      - spectroscopy
+      - photometric redshift
+      - cluster abundance
+      - cluster gas fraction
+    surveys:
+      - eROSITA
+      - eFEDS
+      - eRASS1
+      - ACT
+      - SPT
+      - Planck
+      - DES
+      - KiDS
+      - SDSS
+      - redMaPPer
+      - Rubin
+      - LSST
+      - Euclid
+    instruments:
+      - eROSITA
+      - Chandra
+      - XMM-Newton
+      - HSC
+      - DECam
+      - LSSTCam
+    observables:
+      - X-ray luminosity
+      - X-ray temperature
+      - gas mass
+      - gas fraction
+      - SZ signal
+      - weak-lensing mass
+      - optical richness
+      - velocity dispersion
+      - BCG luminosity
+      - intracluster light
+      - halo mass function
+      - matter power spectrum
+    parameters:
+      - cluster mass
+      - halo mass
+      - mass-observable relation
+      - gas fraction
+      - Omega_m
+      - sigma8
+      - S8
+      - H0
+      - h0
+      - redshift
+    methods:
+      - machine learning
+      - random forest
+      - Gaussian process emulator
+      - neural network
+      - CNN
+      - simulation-based inference
+      - hydrodynamical simulations
+      - mock catalogs
+      - classification
+      - regression
+    systematics:
+      - mass calibration
+      - hydrostatic mass bias
+      - selection function
+      - projection effects
+      - photometric redshift uncertainty
+      - miscentering
+      - baryonic feedback
+      - AGN feedback
+      - simulation-to-observation domain shift
+      - emulator uncertainty
+      - training-set coverage
+      - covariance estimation
+    negative_topics:
+      - exoplanet
+      - planetary system
+      - cell migration
+      - biology
+      - medicine
+    conditional_negatives: {}
+    paper_role_hints:
+      direct_evidence:
+        - cluster sample
+        - cluster catalog
+        - mass calibration
+        - x-ray
+        - sz
+        - weak lensing
+        - eROSITA
+      theory_interpretation:
+        - cosmological constraints
+        - cluster abundance
+        - self-similar
+      method_or_instrument:
+        - survey
+        - pipeline
+        - selection
+      background_review:
+        - review
+        - overview
+
   galaxy_formation:
     arxiv_categories:
       - astro-ph.GA
@@ -379,3 +502,39 @@ profile_overlays:
       - '"red candidate massive galaxies" "600 Myr after the Big Bang"'
       - '"JWST" "quiescent galaxies" "z > 3"'
       - '"JWST" "stellar mass density" "high redshift"'
+
+method_overlays:
+  machine_learning:
+    description: Cross-cutting machine learning / inference methods (not a science domain).
+    match:
+      any:
+        - machine learning
+        - deep learning
+        - neural network
+        - random forest
+        - gaussian process
+        - emulator
+        - transformer
+        - cnn
+        - regression
+        - classification
+    methods:
+      - machine learning
+      - random forest
+      - neural network
+      - Gaussian process emulator
+      - CNN
+      - simulation-based inference
+      - classification
+      - regression
+      - anomaly detection
+    expected_paper_types:
+      - method
+      - simulation calibration
+      - observational pipeline
+      - catalog construction
+      - inference
+    canonical_queries:
+      - '"machine learning" astrophysics'
+      - '"deep learning" astronomy'
+      - '"neural network" astrophysics'
