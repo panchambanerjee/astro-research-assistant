@@ -13,6 +13,7 @@ PaperRole = Literal[
     "theory_interpretation",
     "method_or_instrument",
     "background_review",
+    "background_infrastructure",
     "off_topic",
 ]
 
