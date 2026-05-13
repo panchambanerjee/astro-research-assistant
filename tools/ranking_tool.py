@@ -7,6 +7,7 @@ import math
 import re
 
 from schemas.paper import PaperMetadata, RankedPaper
+from schemas.topic_profile import TopicProfile
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 JWST_HIGHZ_TERMS: dict[str, float] = {
@@ -144,30 +145,88 @@ def _paper_text_for_scoring(paper: PaperMetadata) -> str:
     ).lower()
 
 
+def _rw(weights: dict[str, float], key: str, default: float) -> float:
+    v = weights.get(key)
+    return float(v) if v is not None else default
+
+
+def profile_relevance_score(paper: PaperMetadata, profile: TopicProfile) -> float:
+    """Deterministic relevance from TopicProfile vocabulary and conditional negatives."""
+    text = _paper_text_for_scoring(paper)
+    raw = _relevance_score(paper, profile.original_topic) * 4.0
+    weights = profile.relevance_weights or {}
+
+    weighted_lists: tuple[tuple[str, list[str]], ...] = (
+        ("observables", profile.observables),
+        ("probes", profile.probes),
+        ("surveys", profile.surveys_or_missions),
+        ("parameters", profile.parameters),
+        ("methods", profile.methods),
+        ("systematics", profile.systematics),
+        ("phenomena", profile.phenomena),
+        ("instruments", profile.instruments),
+        ("subdomains", profile.subdomains),
+    )
+    for key, lst in weighted_lists:
+        inc = _rw(weights, key, 1.8)
+        for phrase in lst:
+            pl = phrase.lower()
+            if len(pl) >= 2 and pl in text:
+                raw += inc
+
+    neg_w = _rw(weights, "negative_topics", -5.0)
+    for neg in profile.negative_topics:
+        if neg.lower() in text:
+            raw += neg_w
+
+    for block in profile.conditional_negatives:
+        allow_hit = any(a.lower() in text for a in block.allow_if)
+        if allow_hit:
+            continue
+        for neg in block.negative_terms:
+            if neg.lower() in text:
+                raw -= 7.0
+
+    rescued = bool(profile.conditional_allow_terms) and any(
+        a.lower() in text for a in profile.conditional_allow_terms
+    )
+    if rescued:
+        raw += 5.5
+
+    if "gravitational wave" in text and profile.primary_domain == "cosmology" and not rescued:
+        raw -= 5.5
+
+    return max(0.0, min(1.0, raw / 14.0))
+
+
 def topic_relevance_score(
     paper: PaperMetadata,
     topic: str,
     *,
+    topic_profile: TopicProfile | None = None,
     extra_negative_terms: list[str] | None = None,
 ) -> float:
     """Weighted topic relevance score with optional negative-term penalties."""
-    topic_l = topic.lower()
     text = _paper_text_for_scoring(paper)
 
-    score = _relevance_score(paper, topic) * 4.0
-    if any(term in topic_l for term in ("jwst", "high z", "high-z", "high redshift", "massive")):
-        for term, weight in JWST_HIGHZ_TERMS.items():
-            if term in text:
-                score += weight
-    if any(term in topic_l for term in ("dark energy", "w0", "wa", "equation of state", "expansion")):
-        for term, weight in DARK_ENERGY_TERMS.items():
-            if term in text:
-                score += weight
-        for term, penalty in DARK_ENERGY_NEGATIVE_TERMS.items():
-            if term in text:
-                score += penalty
-        if "gravitational wave" in text and "dark energy" not in text and "standard siren" not in text:
-            score -= 6.0
+    if topic_profile is not None:
+        score = profile_relevance_score(paper, topic_profile) * 10.0
+    else:
+        topic_l = topic.lower()
+        score = _relevance_score(paper, topic) * 4.0
+        if any(term in topic_l for term in ("jwst", "high z", "high-z", "high redshift", "massive")):
+            for term, weight in JWST_HIGHZ_TERMS.items():
+                if term in text:
+                    score += weight
+        if any(term in topic_l for term in ("dark energy", "w0", "wa", "equation of state", "expansion")):
+            for term, weight in DARK_ENERGY_TERMS.items():
+                if term in text:
+                    score += weight
+            for term, penalty in DARK_ENERGY_NEGATIVE_TERMS.items():
+                if term in text:
+                    score += penalty
+            if "gravitational wave" in text and "dark energy" not in text and "standard siren" not in text:
+                score -= 6.0
 
     penalties = dict(NEGATIVE_TERMS)
     for term in extra_negative_terms or []:
@@ -212,6 +271,8 @@ def rank_papers(
     topic: str,
     current_year: int | None = None,
     negative_terms: list[str] | None = None,
+    *,
+    topic_profile: TopicProfile | None = None,
 ) -> list[RankedPaper]:
     """Rank papers deterministically using citation, velocity, recency, and lexical relevance."""
     if not papers:
@@ -231,6 +292,7 @@ def rank_papers(
         relevance_score = topic_relevance_score(
             paper,
             topic=topic,
+            topic_profile=topic_profile,
             extra_negative_terms=negative_terms,
         )
         recency_score = _recency_score(paper, current_year)
@@ -271,12 +333,17 @@ def rank_papers(
     return ranked
 
 
-def select_canonical_papers(ranked: list[RankedPaper], n: int = 10) -> list[RankedPaper]:
-    """Select top canonical papers from ranked candidates."""
+def select_primary_papers(ranked: list[RankedPaper], n: int = 10) -> list[RankedPaper]:
+    """Select top primary papers from ranked candidates."""
     selected = [r.model_copy(deep=True) for r in sorted(ranked, key=lambda r: r.rank or 10**9)[: max(0, n)]]
     for paper in selected:
-        paper.ranking_bucket = "canonical"
+        paper.ranking_bucket = "primary"
     return selected
+
+
+def select_canonical_papers(ranked: list[RankedPaper], n: int = 10) -> list[RankedPaper]:
+    """Deprecated alias for :func:`select_primary_papers`."""
+    return select_primary_papers(ranked, n=n)
 
 
 def select_recent_high_signal_papers(

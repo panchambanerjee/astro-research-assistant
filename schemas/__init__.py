@@ -12,6 +12,7 @@ from .paper_analysis import PaperAnalysis
 from .report import ResearchReport
 from .synthesis import FieldSynthesis
 from .topic_expansion import TopicExpansion
+from .topic_profile import ConditionalNegativeBlock, PaperRole, ProfileSource, TopicProfile
 
 __all__ = [
     "CitationCounts",
@@ -24,4 +25,8 @@ __all__ = [
     "ResearchHypothesis",
     "ResearchReport",
     "TopicExpansion",
+    "TopicProfile",
+    "PaperRole",
+    "ProfileSource",
+    "ConditionalNegativeBlock",
 ]

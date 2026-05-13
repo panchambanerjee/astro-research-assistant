@@ -1,0 +1,381 @@
+# Unified ontology for TopicProfile construction (deterministic matching).
+# Domain = broad reusable vocabulary; profile_overlays = narrow refinement when patterns match.
+# TopicExpansion is derived via query_generator — do not blur into PaperAnalysis.
+
+relevance_weights:
+  phenomena: 4.0
+  observables: 3.0
+  probes: 3.0
+  surveys: 2.5
+  instruments: 2.5
+  parameters: 2.0
+  methods: 2.0
+  systematics: 1.0
+  subdomains: 1.5
+  negative_topics: -5.0
+
+domains:
+  cosmology:
+    arxiv_categories:
+      - astro-ph.CO
+      - astro-ph.GA
+      - gr-qc
+    aliases:
+      - cosmology
+      - dark energy
+      - dark matter
+      - large-scale structure
+      - bao
+      - supernova
+      - cmb
+      - hubble constant
+      - equation of state
+      - expansion history
+    probes:
+      - CMB
+      - BAO
+      - Type Ia supernovae
+      - weak lensing
+      - galaxy clustering
+      - cluster counts
+    surveys:
+      - Planck
+      - ACT
+      - SPT
+      - DES
+      - KiDS
+      - HSC
+      - DESI
+      - eBOSS
+      - BOSS
+      - SDSS
+      - Pantheon
+      - Pantheon+
+      - Union2.1
+    parameters:
+      - H0
+      - Omega_m
+      - Omega_Lambda
+      - Omega_K
+      - sigma8
+      - S8
+      - w
+      - w0
+      - wa
+      - rho_DE(z)
+    methods:
+      - MCMC
+      - Bayesian inference
+      - distance ladder
+      - inverse distance ladder
+      - CPL parametrization
+    systematics:
+      - SN calibration
+      - host-galaxy mass correction
+      - Malmquist bias
+      - photometric calibration
+      - intrinsic alignment
+      - shear calibration
+      - CMB foregrounds
+      - BAO reconstruction systematics
+    observables:
+      - CMB anisotropies
+      - galaxy BAO
+      - Type Ia supernova Hubble diagram
+    negative_topics:
+      - cell migration
+      - biology
+      - medicine
+      - exoplanet
+      - planetary system
+    relevance_weights:
+      parameters: 3.0
+      probes: 3.0
+    paper_role_hints:
+      direct_evidence:
+        - observational constraints
+        - cosmological implications
+        - parameter constraints
+        - measurements
+        - survey results
+      theory_interpretation:
+        - model
+        - modified gravity
+        - dynamical dark energy
+        - warm dark matter
+      method_or_instrument:
+        - survey overview
+        - instrument
+        - telescope
+        - pipeline
+      background_review:
+        - review
+        - overview
+        - results
+    conditional_negatives:
+      gravitational_waves:
+        negative_terms:
+          - gw150914
+          - binary black hole merger
+          - stellar-mass black hole
+        allow_if:
+          - standard siren
+          - dark energy
+          - hubble constant
+          - luminosity distance
+          - cosmological constraints
+
+  galaxy_formation:
+    arxiv_categories:
+      - astro-ph.GA
+      - astro-ph.CO
+    aliases:
+      - galaxy formation
+      - galaxy evolution
+      - high redshift galaxies
+      - high-z galaxies
+      - early galaxies
+      - massive galaxies
+      - jwst
+      - james webb
+      - high z
+      - high-z
+      - high redshift
+      - stellar mass
+      - ceers
+      - jades
+    probes: []
+    surveys:
+      - JWST
+      - CEERS
+      - JADES
+      - GLASS-JWST
+      - UNCOVER
+      - COSMOS-Web
+      - PRIMER
+      - EXCELS
+    instruments:
+      - NIRCam
+      - NIRSpec
+      - MIRI
+      - NIRISS
+    parameters:
+      - stellar mass
+      - stellar mass density
+      - galaxy number density
+      - redshift
+      - star-formation rate
+      - stellar age
+      - dust attenuation
+      - UV luminosity density
+    observables:
+      - NIRCam photometry
+      - NIRSpec spectroscopy
+      - photometric redshift
+      - spectroscopic redshift
+      - stellar mass function
+      - UV luminosity function
+      - rest-frame optical photometry
+      - emission line fluxes
+    systematics:
+      - photometric redshift uncertainty
+      - dusty low-redshift interlopers
+      - AGN contamination
+      - nebular emission line contamination
+      - stellar population synthesis assumptions
+      - IMF assumptions
+      - dust attenuation modeling
+      - cosmic variance
+      - selection completeness
+      - lensing magnification uncertainty
+    methods: []
+    negative_topics:
+      - axion
+      - exoplanet
+      - planetary
+      - cell migration
+      - biology
+      - medicine
+    conditional_negatives: {}
+    paper_role_hints:
+      direct_evidence:
+        - NIRSpec
+        - NIRCam
+        - spectroscopic
+        - candidate
+        - stellar mass density
+        - mass function
+        - survey
+        - ceers
+        - jades
+      theory_interpretation:
+        - implications
+        - halo
+        - lambda cdm
+        - warm dark matter
+        - star formation efficiency
+      method_or_instrument:
+        - telescope
+        - instrument
+        - data reduction
+        - pipeline
+      background_review:
+        - review
+        - overview
+        - mission
+
+  gravitational_waves:
+    arxiv_categories:
+      - gr-qc
+      - astro-ph.HE
+    aliases:
+      - gravitational wave
+      - gravitational waves
+      - ligo
+      - virgo
+      - kagra
+      - compact binary
+      - binary neutron star
+      - standard siren
+    probes: []
+    surveys: []
+    parameters: []
+    methods: []
+    systematics: []
+    observables: []
+    instruments: []
+    negative_topics: []
+    conditional_negatives: {}
+    paper_role_hints: {}
+
+  exoplanets:
+    arxiv_categories:
+      - astro-ph.EP
+    aliases:
+      - exoplanet
+      - exoplanets
+      - transiting planet
+      - planetary atmosphere
+      - habitable zone
+      - radial velocity planet
+    probes: []
+    surveys: []
+    parameters: []
+    methods: []
+    systematics: []
+    observables: []
+    instruments: []
+    negative_topics: []
+    conditional_negatives: {}
+    paper_role_hints: {}
+
+profile_overlays:
+  s8_weak_lensing:
+    description: Weak-lensing / CMB clustering-amplitude tension profile.
+    applies_to_domains:
+      - cosmology
+    match:
+      any:
+        - s8
+        - s_8
+        - sigma8 tension
+        - cosmic shear
+        - weak lensing
+      boost_if:
+        - planck
+        - kids
+        - des
+        - hsc
+    canonical_queries:
+      - '"S8 tension" "weak lensing"'
+      - '"S_8" "cosmic shear" Planck'
+      - '"sigma8 tension" KiDS DES HSC Planck'
+      - '"cosmic shear" "Planck" "S8"'
+    observables:
+      - cosmic shear
+      - weak gravitational lensing
+      - weak lensing two-point functions
+      - galaxy clustering
+      - CMB lensing
+      - CMB anisotropies
+    surveys:
+      - Planck
+      - DES
+      - KiDS
+      - HSC
+      - ACT
+      - SPT
+    parameters:
+      - S8
+      - sigma8
+      - Omega_m
+    systematics:
+      - intrinsic alignment
+      - photometric redshift uncertainty
+      - shear calibration
+      - baryonic feedback
+      - nonlinear matter power spectrum modeling
+      - lensing reconstruction bias
+    arxiv_categories:
+      - astro-ph.CO
+      - astro-ph.GA
+
+  dark_energy_evolution:
+    description: Time-evolving dark energy equation of state and distance probes.
+    applies_to_domains:
+      - cosmology
+    match:
+      any:
+        - dark energy
+        - equation of state
+        - expansion history
+        - w0
+        - wa
+        - cpl
+        - time evolution
+      boost_if:
+        - bao
+        - supernova
+        - desi
+        - pantheon
+        - planck
+        - eboss
+    canonical_queries:
+      - '"dark energy equation of state" "w0" "wa"'
+      - '"time evolving dark energy" "BAO" "supernovae"'
+      - '"dark energy density evolution" "Type Ia supernovae"'
+      - '"DESI" "evolving dark energy"'
+      - '"Pantheon+" "dark energy equation of state"'
+      - '"eBOSS" "dark energy" "w0 wa"'
+      - '"Planck" "BAO" "SNe" "dark energy equation of state"'
+      - '"CPL parametrization" "dark energy"'
+
+  jwst_massive_galaxies:
+    description: JWST-era high-z massive galaxy surveys and stellar populations.
+    applies_to_domains:
+      - galaxy_formation
+    match:
+      any:
+        - jwst
+        - james webb
+        - high z
+        - high-z
+        - high redshift
+        - early galaxies
+      boost_if:
+        - massive
+        - stellar mass
+        - ceers
+        - jades
+        - nirspec
+        - nircam
+    canonical_queries:
+      - '"JWST" "massive galaxies" "high redshift"'
+      - '"JWST" "stellar mass" "z > 8"'
+      - '"CEERS" "massive galaxies"'
+      - '"JADES" "stellar mass function"'
+      - '"GLASS-JWST" "luminous galaxies" "z > 7"'
+      - '"UNCOVER" "NIRSpec" "z > 8"'
+      - '"red candidate massive galaxies" "600 Myr after the Big Bang"'
+      - '"JWST" "quiescent galaxies" "z > 3"'
+      - '"JWST" "stellar mass density" "high redshift"'

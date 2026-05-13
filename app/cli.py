@@ -13,13 +13,27 @@ import typer
 import yaml
 
 from app.config import load_config
-from schemas import PaperAnalysis, PaperMetadata, ResearchHypothesis, ResearchReport, TopicExpansion
+from schemas import (
+    PaperAnalysis,
+    PaperMetadata,
+    ResearchHypothesis,
+    ResearchReport,
+    TopicExpansion,
+    TopicProfile,
+)
+from schemas.topic_profile import ProfileSource
 from tools.ads_tool import search_ads_papers
 from tools.arxiv_tool import search_arxiv_papers
 from tools.metadata_resolver import deduplicate_papers
 from tools.openalex_tool import search_openalex_works
 from tools.pdf_tool import download_pdf, extract_text_from_pdf
-from tools.ranking_tool import rank_papers, select_canonical_papers, select_recent_high_signal_papers, topic_relevance_score
+from tools.paper_role_classifier import (
+    default_selection_policy,
+    select_primary_ranked_with_quotas,
+)
+from tools.query_generator import topic_profile_to_expansion
+from tools.ranking_tool import rank_papers, select_recent_high_signal_papers, topic_relevance_score
+from tools.topic_profiler import build_topic_profile
 from tools.semantic_scholar_tool import enrich_paper_with_semantic_scholar
 from tools.topic_expansion_tool import expand_topic_with_web
 from tools.wiki_tool import write_source_page
@@ -123,9 +137,6 @@ JWST_SYSTEMATICS = {
     "lensing magnification uncertainty",
 }
 JWST_INSTRUMENTS = {"NIRCam", "NIRSpec", "MIRI", "NIRISS"}
-DIRECT_OBS_TERMS = ("ceers", "jades", "glass-jwst", "uncover", "cosmos-web", "primer", "excels", "nirspec", "nircam")
-INTERPRETIVE_TERMS = ("stellar mass density", "halo abundance", "quiescent galaxies", "warm dark matter", "tension")
-BACKGROUND_TERMS = ("overview", "instrument", "mission", "review", "the james webb space telescope", "candels", "tng50")
 DARK_ENERGY_OBSERVABLES = {
     "Type Ia supernova distance modulus",
     "BAO distance scale",
@@ -275,11 +286,17 @@ def _apply_topic_relevance_filter(
     topic: str,
     negative_terms: list[str],
     threshold: float = 0.25,
+    topic_profile: TopicProfile | None = None,
 ) -> tuple[list[PaperMetadata], list[PaperMetadata]]:
     kept: list[PaperMetadata] = []
     filtered: list[PaperMetadata] = []
     for paper in papers:
-        score = topic_relevance_score(paper, topic=topic, extra_negative_terms=negative_terms)
+        score = topic_relevance_score(
+            paper,
+            topic=topic,
+            topic_profile=topic_profile,
+            extra_negative_terms=negative_terms,
+        )
         if score >= threshold:
             kept.append(paper)
         else:
@@ -347,23 +364,6 @@ def _clean_paper_analysis_against_text(
     return analysis
 
 
-def _classify_paper_role(paper: PaperMetadata, topic: str) -> str:
-    text = " ".join([paper.title or "", paper.abstract or "", paper.journal or "", paper.venue or ""]).lower()
-    relevance = topic_relevance_score(paper, topic=topic)
-    if _is_dark_energy_topic(topic):
-        if "gravitational wave" in text and "dark energy" not in text and "standard siren" not in text:
-            return "off_topic"
-    if relevance < 0.15:
-        return "off_topic"
-    if any(term in text for term in DIRECT_OBS_TERMS):
-        return "direct_observational"
-    if any(term in text for term in INTERPRETIVE_TERMS):
-        return "interpretive_theory"
-    if any(term in text for term in BACKGROUND_TERMS):
-        return "background"
-    return "direct_observational" if relevance >= 0.45 else "background"
-
-
 def _topic_keywords(topic: str) -> set[str]:
     tokens = {tok for tok in re.findall(r"[a-z0-9]+", topic.lower()) if len(tok) >= 2}
     return {tok for tok in tokens if tok not in TOPIC_STOPWORDS}
@@ -383,8 +383,8 @@ def _fixture_topic_overlap(topic: str, papers: list[PaperMetadata]) -> float:
     return best
 
 
-def _topic_expand(topic: str) -> TopicExpansion:
-    """Simple ontology/rule-based topic expansion for MVP."""
+def _legacy_yaml_topic_expand(topic: str) -> TopicExpansion:
+    """Legacy per-file ontology expansion merged into profile-driven TopicExpansion."""
     topic_l = topic.lower()
     observables_db = _load_yaml(ONTOLOGY_DIR / "observables.yaml")
     surveys_db = _load_yaml(ONTOLOGY_DIR / "surveys_and_missions.yaml")
@@ -547,6 +547,27 @@ def _topic_expand(topic: str) -> TopicExpansion:
         subfields=sorted(subfields),
         arxiv_categories=sorted(arxiv_categories),
     )
+
+
+def build_topic_profile_and_expansion(
+    topic: str,
+    *,
+    profile_source: ProfileSource = "ontology",
+) -> tuple[TopicProfile, TopicExpansion]:
+    """Build TopicProfile and merged TopicExpansion (astro ontology + legacy YAML)."""
+    profile = build_topic_profile(topic, source=profile_source)
+    expansion = topic_profile_to_expansion(profile)
+    return profile, _merge_topic_expansions(expansion, _legacy_yaml_topic_expand(topic))
+
+
+def bootstrap_paper_analysis(
+    paper: PaperMetadata,
+    topic: str,
+    extracted_text: str,
+    expansion: TopicExpansion,
+) -> PaperAnalysis:
+    """Public name for deterministic paper analysis bootstrap (tests + leakage guards)."""
+    return _bootstrap_analysis(paper, topic, extracted_text, expansion)
 
 
 def _astro_relevance_score(paper: PaperMetadata) -> float:
@@ -732,12 +753,7 @@ def _bootstrap_analysis(
     metadata_text = _paper_metadata_text(paper)
 
     observables = sorted({*paper.observables, *[o for o in expansion.observables if o.lower() in metadata_text]})
-    datasets = sorted(
-        {
-            *_extract_datasets_from_paper(paper, metadata_text),
-            *[s for s in expansion.surveys if s.lower() in metadata_text],
-        }
-    )
+    datasets = sorted({*_extract_datasets_from_paper(paper, metadata_text)})
     parameters = sorted({*paper.parameters, *[p for p in expansion.parameters if p.lower() in metadata_text]})
     systematics = sorted(
         {
@@ -1111,7 +1127,7 @@ def _run_crew_or_fallback(
 def _render_report_markdown(
     topic: str,
     expansion: TopicExpansion,
-    canonical: list[PaperMetadata],
+    primary: list[PaperMetadata],
     recent: list[PaperMetadata],
     background: list[PaperMetadata],
     analyses: list[PaperAnalysis],
@@ -1119,11 +1135,15 @@ def _render_report_markdown(
     crew_result_text: str,
     mode: str,
     fixture_mode: bool,
+    topic_profile: TopicProfile | None = None,
+    *,
+    debug_report: bool = True,
+    selection_diagnostics: list[str] | None = None,
 ) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
-    canonical_keys = {_paper_key(p) for p in canonical}
-    recent_unique = [paper for paper in recent if _paper_key(paper) not in canonical_keys]
-    cited_unique = canonical + [p for p in recent_unique if p not in canonical]
+    primary_keys = {_paper_key(p) for p in primary}
+    recent_unique = [paper for paper in recent if _paper_key(paper) not in primary_keys]
+    cited_unique = primary + [p for p in recent_unique if p not in primary]
     report = ResearchReport(
         title=f"Research Report: {topic}",
         query_or_brief=topic,
@@ -1132,7 +1152,7 @@ def _render_report_markdown(
         hypotheses=hypotheses,
         cited_papers=cited_unique,
     )
-    primary_paper_heading = "## Selected Fixture Papers" if fixture_mode else "## Selected Canonical Papers"
+    primary_paper_heading = "## Selected Fixture Papers" if fixture_mode else "## Selected Primary Papers"
 
     lines = [
         f"# {report.title}",
@@ -1140,23 +1160,26 @@ def _render_report_markdown(
         f"- Generated: {now}",
         f"- Mode: {mode}",
         f"- Topic: {topic}",
-        (
-            "- Note: Fixture mode active; citation ranking and retrieval confidence are limited to provided fixture metadata."
-            if fixture_mode
-            else ""
-        ),
-        "",
-        "## Topic Expansion",
-        f"- Canonical queries: {', '.join(expansion.canonical_queries) if expansion.canonical_queries else 'None'}",
-        f"- Observables: {', '.join(expansion.observables) if expansion.observables else 'None'}",
-        f"- Surveys: {', '.join(expansion.surveys) if expansion.surveys else 'None'}",
-        f"- Instruments: {', '.join(expansion.instruments) if expansion.instruments else 'None'}",
-        f"- Parameters: {', '.join(expansion.parameters) if expansion.parameters else 'None'}",
-        f"- Systematics: {', '.join(expansion.systematics) if expansion.systematics else 'None'}",
-        "",
-        primary_paper_heading,
     ]
-    for i, p in enumerate(canonical, 1):
+    if fixture_mode:
+        lines.append(
+            "- Note: Fixture mode active; citation ranking and retrieval confidence are limited to provided fixture metadata."
+        )
+    lines.extend(
+        [
+            "",
+            "## Topic Expansion",
+            f"- Retrieval queries: {', '.join(expansion.canonical_queries) if expansion.canonical_queries else 'None'}",
+            f"- Observables: {', '.join(expansion.observables) if expansion.observables else 'None'}",
+            f"- Surveys: {', '.join(expansion.surveys) if expansion.surveys else 'None'}",
+            f"- Instruments: {', '.join(expansion.instruments) if expansion.instruments else 'None'}",
+            f"- Parameters: {', '.join(expansion.parameters) if expansion.parameters else 'None'}",
+            f"- Systematics: {', '.join(expansion.systematics) if expansion.systematics else 'None'}",
+            "",
+            primary_paper_heading,
+        ]
+    )
+    for i, p in enumerate(primary, 1):
         lines.append(f"{i}. {p.title or 'Untitled'} ({p.year or 'n/a'})")
     lines.extend(["", "## Selected Recent High-Signal Papers"])
     if not recent_unique:
@@ -1167,6 +1190,19 @@ def _render_report_markdown(
         lines.extend(["", "## Background / Infrastructure Papers"])
         for i, p in enumerate(background, 1):
             lines.append(f"{i}. {p.title or 'Untitled'} ({p.year or 'n/a'})")
+    if debug_report and selection_diagnostics:
+        lines.extend(["", "## Selection Diagnostics", *selection_diagnostics])
+    if topic_profile and debug_report:
+        lines.extend(
+            [
+                "",
+                "## TopicProfile (debug)",
+                f"- profile_version: {topic_profile.profile_version}",
+                f"- source: {topic_profile.source}",
+                f"- primary_domain: {topic_profile.primary_domain or 'unknown'}",
+                f"- profile_confidence: {topic_profile.profile_confidence}",
+            ]
+        )
     lines.extend(["", "## Structured Hypotheses"])
     if not hypotheses:
         lines.append("No structured hypotheses generated.")
@@ -1223,26 +1259,34 @@ def research(
         max=1.0,
         help="Minimum topic relevance score to keep candidate papers before ranking.",
     ),
+    debug_report: bool = typer.Option(
+        True,
+        "--debug-report/--no-debug-report",
+        help="Include selection diagnostics and TopicProfile summary in the report.",
+    ),
 ) -> None:
     """Run end-to-end research pipeline on a topic."""
     config = load_config()
     typer.secho("Starting research pipeline...", fg=typer.colors.CYAN)
     selected_sources = _parse_sources(sources)
 
-    expansion = _topic_expand(topic)
+    profile_source: ProfileSource = "fixture" if input_json else "ontology"
+    topic_profile, expansion = build_topic_profile_and_expansion(topic, profile_source=profile_source)
     if web_expand:
         try:
             web_expansion = expand_topic_with_web(topic)
             expansion = _merge_topic_expansions(expansion, web_expansion)
+            topic_profile = topic_profile.model_copy(update={"source": "ontology+web"})
             typer.secho(
                 f"Web expansion added {len(web_expansion.canonical_queries)} discovered queries.",
                 fg=typer.colors.CYAN,
             )
         except Exception as exc:  # noqa: BLE001
             typer.secho(f"Web topic expansion skipped: {exc}", fg=typer.colors.YELLOW)
-    typer.echo(f"Expanded topic with {len(expansion.canonical_queries)} canonical queries.")
+    typer.echo(f"Expanded topic with {len(expansion.canonical_queries)} retrieval queries.")
 
     fixture_text_by_key: dict[str, str] = {}
+    filter_reject_count = 0
     if input_json is not None:
         papers, fixture_text_by_key = _load_papers_fixture(input_json)
         typer.secho(f"Loaded {len(papers)} papers from fixture: {input_json}", fg=typer.colors.CYAN)
@@ -1264,12 +1308,14 @@ def research(
         if not astro_relevant:
             typer.secho("No astro-relevant fixture papers after filtering; using all fixture papers.", fg=typer.colors.YELLOW)
             astro_relevant = papers
-        relevant, _filtered_out = _apply_topic_relevance_filter(
+        relevant, filtered_out = _apply_topic_relevance_filter(
             astro_relevant,
             topic=topic,
             negative_terms=expansion.negative_terms,
             threshold=relevance_threshold,
+            topic_profile=topic_profile,
         )
+        filter_reject_count = len(filtered_out)
         if not relevant:
             typer.secho(
                 "No fixture papers met topic relevance threshold; using astro-filtered fixture papers.",
@@ -1299,12 +1345,14 @@ def research(
         if not astro_relevant:
             typer.secho("No astro-relevant papers after filtering; falling back to unfiltered set.", fg=typer.colors.YELLOW)
             astro_relevant = papers
-        relevant, _filtered_out = _apply_topic_relevance_filter(
+        relevant, filtered_out = _apply_topic_relevance_filter(
             astro_relevant,
             topic=topic,
             negative_terms=expansion.negative_terms,
             threshold=relevance_threshold,
+            topic_profile=topic_profile,
         )
+        filter_reject_count = len(filtered_out)
         if not relevant:
             typer.secho(
                 "No live papers met topic relevance threshold; using astro-filtered set.",
@@ -1325,21 +1373,50 @@ def research(
             except Exception:  # noqa: BLE001
                 enriched.append(paper)
 
-    ranked = rank_papers(enriched, topic=topic, negative_terms=expansion.negative_terms)
-    primary_ranked = [r for r in ranked if _classify_paper_role(r.metadata, topic) in {"direct_observational", "interpretive_theory"}]
-    background_ranked = [r for r in ranked if _classify_paper_role(r.metadata, topic) == "background"]
-    if not primary_ranked:
-        primary_ranked = ranked
-
-    canonical_threshold = max(relevance_threshold, 0.35) if _is_dark_energy_topic(topic) else relevance_threshold
-    canonical_candidates = [r for r in primary_ranked if r.relevance_score >= canonical_threshold]
-    if not canonical_candidates:
-        canonical_candidates = primary_ranked
-    canonical_ranked = select_canonical_papers(canonical_candidates, n=min(10, max_papers))
+    ranked = rank_papers(
+        enriched,
+        topic=topic,
+        negative_terms=expansion.negative_terms,
+        topic_profile=topic_profile,
+    )
+    pol = default_selection_policy(max_papers)
+    primary_cut = (
+        max(relevance_threshold, 0.35) if topic_profile.primary_domain == "cosmology" else relevance_threshold
+    )
+    primary_ranked, background_md, rejected_roles = select_primary_ranked_with_quotas(
+        ranked,
+        topic_profile,
+        topic,
+        relevance_threshold=relevance_threshold,
+        primary_threshold=primary_cut,
+        policy=pol,
+    )
     recent_ranked = select_recent_high_signal_papers(ranked, n=min(5, max_papers))
 
-    selected_ranked = canonical_ranked + [r for r in recent_ranked if r.metadata not in [c.metadata for c in canonical_ranked]]
+    selected_ranked = primary_ranked + [
+        r for r in recent_ranked if r.metadata not in [c.metadata for c in primary_ranked]
+    ]
     selected_papers = deduplicate_papers([r.metadata for r in selected_ranked])[:max_papers]
+
+    flat_matches: list[str] = []
+    for vals in topic_profile.matched_terms.values():
+        flat_matches.extend(vals)
+    selection_diagnostics = [
+        f"- Topic profile domain: {topic_profile.primary_domain or 'unknown'}",
+        f"- Topic profile source: {topic_profile.source}",
+        f"- Papers dropped by relevance pre-filter: {filter_reject_count}",
+        f"- Papers rejected as off-topic (role): {len(rejected_roles)}",
+        f"- Relevance threshold: {relevance_threshold}",
+        f"- Primary relevance cutoff: {primary_cut}",
+        (
+            f"- Selection policy: max_papers={pol.max_papers}, min_direct_evidence={pol.min_direct_evidence}, "
+            f"max_theory={pol.max_theory_interpretation}, max_background_slot={pol.max_background}"
+        ),
+    ]
+    if flat_matches:
+        selection_diagnostics.append(
+            f"- Matched profile terms: {', '.join(sorted(set(flat_matches))[:48])}"
+        )
 
     text_by_paper: dict[str, str] = {}
     downloaded_paths: list[Path] = []
@@ -1391,14 +1468,17 @@ def research(
     report_md = _render_report_markdown(
         topic=topic,
         expansion=expansion,
-        canonical=[r.metadata for r in canonical_ranked],
+        primary=[r.metadata for r in primary_ranked],
         recent=[r.metadata for r in recent_ranked],
-        background=[r.metadata for r in background_ranked[: min(10, max_papers)]],
+        background=background_md[: min(10, max_papers)],
         analyses=analyses,
         hypotheses=hypotheses,
         crew_result_text=crew_result_text,
         mode=mode,
         fixture_mode=input_json is not None,
+        topic_profile=topic_profile,
+        debug_report=debug_report,
+        selection_diagnostics=selection_diagnostics if debug_report else None,
     )
     report_path.write_text(report_md, encoding="utf-8")
 

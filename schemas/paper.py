@@ -128,5 +128,5 @@ class RankedPaper(BaseModel):
     final_score: float = Field(default=0.0, ge=0.0)
     rank: int | None = Field(default=None, ge=1)
 
-    ranking_bucket: Literal["canonical", "recent_high_signal", "candidate"] = "candidate"
+    ranking_bucket: Literal["primary", "recent_high_signal", "candidate"] = "candidate"
     ranking_reason: str | None = None

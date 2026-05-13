@@ -4,10 +4,12 @@ from schemas.paper_analysis import PaperAnalysis
 from app.cli import (
     _apply_topic_relevance_filter,
     _build_structured_hypotheses,
-    _classify_paper_role,
     _clean_paper_analysis_against_text,
+    bootstrap_paper_analysis,
 )
+from tools.paper_role_classifier import classify_paper_role
 from tools.ranking_tool import topic_relevance_score
+from tools.topic_profiler import build_topic_profile
 
 
 def test_apply_topic_relevance_filter_drops_off_topic() -> None:
@@ -21,11 +23,13 @@ def test_apply_topic_relevance_filter_drops_off_topic() -> None:
         abstract="cell migration biology medicine",
         citation_counts=CitationCounts(selected=500),
     )
+    profile = build_topic_profile("Massive high z galaxies from the JWST")
     kept, dropped = _apply_topic_relevance_filter(
         [jwst, off_topic],
         topic="Massive high z galaxies from the JWST",
         negative_terms=["cell migration", "biology", "medicine"],
         threshold=0.25,
+        topic_profile=profile,
     )
     assert jwst in kept
     assert off_topic in dropped
@@ -36,7 +40,10 @@ def test_classify_paper_role_marks_background() -> None:
         title="The James Webb Space Telescope mission overview",
         abstract="mission instrument overview",
     )
-    assert _classify_paper_role(background, "Massive high z galaxies from the JWST") == "background"
+    profile = build_topic_profile("Massive high z galaxies from the JWST")
+    assert (
+        classify_paper_role(background, profile, "Massive high z galaxies from the JWST") == "background_review"
+    )
 
 
 def test_clean_paper_analysis_against_text_removes_unmentioned_terms() -> None:
@@ -87,7 +94,10 @@ def test_dark_energy_relevance_penalizes_non_cosmology_gw_discovery() -> None:
         citation_counts=CitationCounts(selected=400),
     )
     topic = "Dark Energy evolution over time"
-    assert topic_relevance_score(de, topic) > topic_relevance_score(gw, topic)
+    profile = build_topic_profile(topic)
+    assert topic_relevance_score(de, topic, topic_profile=profile) > topic_relevance_score(
+        gw, topic, topic_profile=profile
+    )
 
 
 def test_dark_energy_structured_hypothesis_fallback_not_empty() -> None:
@@ -103,3 +113,23 @@ def test_dark_energy_structured_hypothesis_fallback_not_empty() -> None:
     )
     hypotheses = _build_structured_hypotheses("Dark Energy evolution over time", [analysis])
     assert hypotheses
+
+
+def test_no_profile_leakage_to_paper_analysis() -> None:
+    """TopicExpansion surveys must not populate datasets unless present on the paper."""
+    paper = PaperMetadata(
+        title="TNG50 simulation overview",
+        abstract="simulation of galaxy formation and stellar feedback",
+    )
+    profile = build_topic_profile("S8 tension between weak lensing and Planck")
+    from tools.query_generator import topic_profile_to_expansion
+
+    expansion = topic_profile_to_expansion(profile)
+    analysis = bootstrap_paper_analysis(
+        paper=paper,
+        topic="S8 tension between weak lensing and Planck",
+        extracted_text="",
+        expansion=expansion,
+    )
+    assert "DES" not in analysis.datasets
+    assert "KiDS" not in analysis.datasets
