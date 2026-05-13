@@ -11,12 +11,19 @@ from tools.ranking_tool import rank_papers
 from tools.topic_profiler import build_topic_profile
 
 
-def test_selection_policy_widens_method_quota_for_ml_profile() -> None:
+def test_strict_galaxy_cluster_ml_keeps_method_primary_cap_tight() -> None:
     profile = build_topic_profile("Galaxy Clusters and Machine Learning")
     assert profile.expected_paper_types
     pol = selection_policy_from_profile(profile, max_papers=10)
-    base = default_selection_policy(10)
-    assert pol.max_method_or_instrument >= base.max_method_or_instrument
+    assert pol.max_method_or_instrument == 1
+
+
+def test_selection_policy_widens_method_quota_for_methodish_non_cluster_profile() -> None:
+    profile = build_topic_profile("Dark Energy Survey weak lensing cosmology").model_copy(
+        update={"primary_domain": "cosmology", "expected_paper_types": ["inference", "method"]},
+    )
+    assert profile.primary_domain == "cosmology"
+    pol = selection_policy_from_profile(profile, max_papers=10)
     assert pol.max_method_or_instrument >= 2
 
 
@@ -27,11 +34,19 @@ def test_selection_policy_default_for_non_method_topic() -> None:
 
 
 def test_inference_expected_type_raises_theory_cap() -> None:
-    profile = build_topic_profile("Galaxy Clusters and Machine Learning").model_copy(
+    profile = build_topic_profile("Dark Energy evolution over time").model_copy(
         update={"expected_paper_types": ["inference", "method"]},
     )
     pol = selection_policy_from_profile(profile, max_papers=10)
     assert pol.max_theory_interpretation >= 2
+
+
+def test_strict_galaxy_cluster_ml_caps_theory_primary_at_one() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning").model_copy(
+        update={"expected_paper_types": ["inference", "method"]},
+    )
+    pol = selection_policy_from_profile(profile, max_papers=10)
+    assert pol.max_theory_interpretation == 1
 
 
 def test_classify_prefers_direct_when_ml_terms_match_expected_profile() -> None:
@@ -86,3 +101,65 @@ def test_strict_cluster_ml_requires_both_axes_for_direct() -> None:
         abstract="we use deep learning and a u-net on galaxy cluster simulations to paint gas in n-body halos",
     )
     assert classify_paper_role(paper, profile, profile.original_topic) == "direct_evidence"
+
+
+def test_strict_cluster_generic_classification_without_strong_ml_not_direct() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="Revisiting radio galaxy morphology",
+        abstract=(
+            "We perform morphological classification of Fanaroff–Riley sources and discuss "
+            "their association with galaxy clusters and cluster environments."
+        ),
+    )
+    assert classify_paper_role(paper, profile, profile.original_topic) != "direct_evidence"
+
+
+def test_millennium_tng_without_ml_is_theory_not_direct() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="The MillenniumTNG project",
+        abstract=(
+            "We present the MillenniumTNG suite of cosmological hydrodynamical simulations "
+            "including galaxy clusters and the matter power spectrum."
+        ),
+    )
+    assert classify_paper_role(paper, profile, profile.original_topic) == "theory_interpretation"
+
+
+def test_millennium_passive_emulator_mention_is_theory_not_direct() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="The MillenniumTNG project",
+        abstract=(
+            "We compare simulation predictions to those from current cosmological emulators "
+            "for intracluster gas profiles in galaxy clusters."
+        ),
+    )
+    assert classify_paper_role(paper, profile, profile.original_topic) == "theory_interpretation"
+
+
+def test_cluster_paper_training_emulator_stays_direct() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="Emulating cluster pressure profiles",
+        abstract=(
+            "We build an emulator trained on hydrodynamical simulations of galaxy clusters "
+            "to predict sunyaev-zeldovich signals."
+        ),
+    )
+    assert classify_paper_role(paper, profile, profile.original_topic) == "direct_evidence"
+
+
+def test_strict_photo_z_neural_network_without_cluster_terms_not_method() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="Estimating the redshift distribution of photometric galaxy samples",
+        abstract=(
+            "We compare a neural network approach to estimating N(z) for photometric galaxy samples "
+            "with traditional template methods in wide-field surveys."
+        ),
+    )
+    role = classify_paper_role(paper, profile, profile.original_topic)
+    assert role != "method_or_instrument"
+    assert role in ("background_infrastructure", "off_topic")

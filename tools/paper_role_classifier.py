@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.paper import PaperMetadata, RankedPaper
 from schemas.topic_profile import PaperRole, TopicProfile
+from tools.ml_usage_signals import is_active_ml_usage
 from tools.ranking_tool import topic_relevance_score
 
 CLUSTER_TERMS: tuple[str, ...] = (
@@ -32,25 +35,67 @@ CLUSTER_TERMS: tuple[str, ...] = (
     "erosita",
     "bcg",
     "icl",
+    "sptpol",
+    "spt ",
+    "south pole telescope",
 )
 
-ML_TERMS: tuple[str, ...] = (
+STRONG_ML_TERMS: tuple[str, ...] = (
     "machine learning",
     "deep learning",
     "random forest",
     "neural network",
     "neural networks",
+    "cnn",
+    "convolutional neural network",
+    "convolutional",
     "u-net",
     "unet",
-    "convolutional",
-    "cnn",
-    " gaussian process",
+    "gaussian process",
     "emulator",
-    "regression",
-    "classification",
+    "supervised learning",
+    "regressor",
+    "classifier",
+    "gradient boosting",
+    "xgboost",
     "simulation-based inference",
     "image-to-image",
     "deep neural",
+    "bayesian neural",
+)
+
+WEAK_ML_TERMS: tuple[str, ...] = (
+    "classification",
+    "regression",
+    "clustering",
+    "inference",
+    "estimation",
+    "prediction",
+)
+
+_SIM_CLUSTER_INFRA_TERMS: tuple[str, ...] = (
+    "hydrodynamical simulation",
+    "hydrodynamical simulations",
+    "halo mass function",
+    "matter power spectrum",
+    "baryonic effect",
+    "baryonic effects",
+    "baryonic feedback",
+    "cluster gas fraction",
+    "cluster gas fractions",
+)
+
+_MAJOR_COSMO_SIM_TERMS: tuple[str, ...] = (
+    "millenniumtng",
+    "millennium-tng",
+    "millennium tng",
+    "illustris",
+    "eagle simulation",
+    "simba simulation",
+    "tng50",
+    " tng ",
+    "tng project",
+    "flamingo project",
 )
 
 _ASTRO_CONTEXT_TERMS: tuple[str, ...] = (
@@ -71,45 +116,194 @@ _ASTRO_CONTEXT_TERMS: tuple[str, ...] = (
 )
 
 
+@dataclass(frozen=True)
+class RoleClassificationDetail:
+    """Structured role assignment for debugging (use with --debug-report)."""
+
+    role: PaperRole
+    reason: str
+    matched_cluster_terms: tuple[str, ...] = ()
+    matched_strong_ml_terms: tuple[str, ...] = ()
+    matched_weak_ml_terms: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+
 def _strict_galaxy_cluster_ml_topic(profile: TopicProfile) -> bool:
     overlays = profile.matched_terms.get("method_overlays") or []
     return profile.primary_domain == "galaxy_clusters" and "machine_learning" in overlays
 
 
-def _has_cluster_terms(text: str) -> bool:
+def _role_text(paper: PaperMetadata) -> str:
+    return " ".join(
+        [
+            paper.title or "",
+            paper.abstract or "",
+            paper.journal or "",
+            paper.venue or "",
+            " ".join(paper.fields_of_study or []),
+        ]
+    ).lower()
+
+
+def _matched_substrings(text_lower: str, terms: tuple[str, ...]) -> tuple[str, ...]:
+    hit: list[str] = []
+    for t in terms:
+        tl = t.lower()
+        if tl in text_lower:
+            hit.append(t.strip())
+    return tuple(hit)
+
+
+def has_strong_ml_signal(text: str) -> bool:
+    """Strong ML terms count; weak terms (classification, regression, …) never count alone."""
     tl = text.lower()
-    return any(t.lower() in tl for t in CLUSTER_TERMS)
+    return any(t.lower() in tl for t in STRONG_ML_TERMS)
 
 
-def _has_ml_terms(text: str) -> bool:
-    tl = text.lower()
-    return any(t.lower() in tl for t in ML_TERMS)
+def _has_cluster_terms(text_lower: str) -> bool:
+    return any(t.lower() in text_lower for t in CLUSTER_TERMS)
 
 
-def _has_astro_context(text: str) -> bool:
-    tl = text.lower()
-    return any(t in tl for t in _ASTRO_CONTEXT_TERMS)
+def _has_sim_cluster_infra(text_lower: str) -> bool:
+    if not _has_cluster_terms(text_lower):
+        return False
+    return any(t.lower() in text_lower for t in _SIM_CLUSTER_INFRA_TERMS)
 
 
-def _is_direct_ml_cluster_paper(text: str) -> bool:
-    return _has_cluster_terms(text) and _has_ml_terms(text)
+def _has_major_cosmo_simulation(text_lower: str) -> bool:
+    return any(t.lower() in text_lower for t in _MAJOR_COSMO_SIM_TERMS)
 
 
-def _classify_strict_galaxy_cluster_ml(text: str, relevance: float) -> PaperRole:
-    """Science+method AND for galaxy_clusters topics with machine_learning overlay."""
-    if _is_direct_ml_cluster_paper(text):
-        return "direct_evidence"
+def _has_astro_context(text_lower: str) -> bool:
+    return any(t in text_lower for t in _ASTRO_CONTEXT_TERMS)
+
+
+def _classify_strict_galaxy_cluster_ml_detail(
+    paper: PaperMetadata,
+    profile: TopicProfile,
+    topic: str,
+) -> RoleClassificationDetail:
+    text = _role_text(paper)
+    relevance = topic_relevance_score(paper, topic=topic, topic_profile=profile)
+    m_cluster = _matched_substrings(text, CLUSTER_TERMS)
+    m_strong = _matched_substrings(text, STRONG_ML_TERMS)
+    m_weak = _matched_substrings(text, WEAK_ML_TERMS)
+    warnings: list[str] = []
+    if m_weak and not m_strong:
+        warnings.append("generic method words present but no strong ML phrase")
+
+    has_cluster = bool(m_cluster)
+    has_strong = bool(m_strong)
+    has_sim_infra = _has_sim_cluster_infra(text)
+    has_major_sim = _has_major_cosmo_simulation(text)
+    qualifies_direct_ml = is_active_ml_usage(text, has_strong_ml=has_strong)
+
+    if (has_cluster and has_strong) or (has_sim_infra and has_strong):
+        if qualifies_direct_ml:
+            reason = (
+                "cluster context and active ML usage"
+                if has_cluster and has_strong
+                else "cluster simulation context and active ML usage"
+            )
+            return RoleClassificationDetail(
+                role="direct_evidence",
+                reason=reason,
+                matched_cluster_terms=m_cluster,
+                matched_strong_ml_terms=m_strong,
+                matched_weak_ml_terms=m_weak,
+                warnings=tuple(warnings),
+            )
+        warnings.append("ML tokens present but not active method usage (e.g. comparative emulator mention)")
+
+    if (has_major_sim or has_sim_infra) and has_strong and not qualifies_direct_ml:
+        reason = (
+            "large cosmological simulation suite; ML wording appears comparative or non-operational"
+            if has_major_sim
+            else "cluster simulation context; ML wording appears comparative or non-operational"
+        )
+        return RoleClassificationDetail(
+            role="theory_interpretation",
+            reason=reason,
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
+    if has_major_sim and not has_strong:
+        return RoleClassificationDetail(
+            role="theory_interpretation",
+            reason="large cosmological simulation suite without explicit ML in abstract",
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
+    if has_sim_infra and not has_strong:
+        return RoleClassificationDetail(
+            role="theory_interpretation",
+            reason="cluster-related simulation or matter statistics without explicit ML",
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
     if relevance < 0.12:
-        return "off_topic"
-    if _has_cluster_terms(text) and not _has_ml_terms(text):
-        return "background_infrastructure"
-    if _has_ml_terms(text) and _has_astro_context(text) and not _has_cluster_terms(text):
-        return "method_or_instrument" if relevance >= 0.22 else "background_infrastructure"
-    if _has_ml_terms(text) and relevance >= 0.3:
-        return "method_or_instrument"
+        return RoleClassificationDetail(
+            role="off_topic",
+            reason="very low topic relevance for strict cluster+ML profile",
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
+    if has_cluster and not has_strong:
+        return RoleClassificationDetail(
+            role="background_infrastructure",
+            reason="cluster survey or context without explicit ML",
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
+    # Strong ML alone is not enough for method_or_instrument on strict cluster+ML topics:
+    # require explicit cluster vocabulary (or cluster+simulation infra handled above as direct/theory).
+    cluster_method_context = has_cluster or has_sim_infra
+
+    if has_strong and _has_astro_context(text) and not cluster_method_context:
+        warnings.append("strong ML and astro context but no explicit galaxy-cluster vocabulary")
+        role: PaperRole = "background_infrastructure" if relevance >= 0.22 else "off_topic"
+        return RoleClassificationDetail(
+            role=role,
+            reason="astro ML without explicit cluster/SZ/ICL/BCG focus for strict cluster+ML topic",
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
     if relevance < 0.22:
-        return "off_topic"
-    return "background_infrastructure"
+        return RoleClassificationDetail(
+            role="off_topic",
+            reason="insufficient relevance and no clear cluster+ML signal",
+            matched_cluster_terms=m_cluster,
+            matched_strong_ml_terms=m_strong,
+            matched_weak_ml_terms=m_weak,
+            warnings=tuple(warnings),
+        )
+
+    return RoleClassificationDetail(
+        role="background_infrastructure",
+        reason="residual cluster-adjacent or weak signal",
+        matched_cluster_terms=m_cluster,
+        matched_strong_ml_terms=m_strong,
+        matched_weak_ml_terms=m_weak,
+        warnings=tuple(warnings),
+    )
 
 
 _DIRECT_EVIDENCE_TERMS = (
@@ -156,7 +350,7 @@ _METHOD_INSTRUMENT_TERMS = ("nircam", "nirspec", "miri", "niriss", "instrumental
 
 
 def _extra_direct_terms_from_profile(profile: TopicProfile) -> tuple[str, ...]:
-    """When the topic expects method-style papers, treat ML / pipeline language as direct-evidence cues."""
+    """When the topic expects method-style papers, add strong ML cues only (no weak-only triggers)."""
     types_l = {(t or "").strip().lower() for t in profile.expected_paper_types}
     if not types_l:
         return ()
@@ -178,8 +372,6 @@ def _extra_direct_terms_from_profile(profile: TopicProfile) -> tuple[str, ...]:
         "neural network",
         "random forest",
         "gaussian process",
-        "classification",
-        "regression",
         "emulator",
         "simulation-based inference",
     )
@@ -200,13 +392,17 @@ def _merge_role_hints(profile: TopicProfile, role: str, fallback: tuple[str, ...
     return tuple(out)
 
 
-def classify_paper_role(paper: PaperMetadata, profile: TopicProfile, topic: str) -> PaperRole:
-    """Assign PaperRole using profile domain, relevance, and lexical cues."""
-    text = " ".join([paper.title or "", paper.abstract or "", paper.journal or "", paper.venue or ""]).lower()
+def classify_paper_role_detailed(
+    paper: PaperMetadata,
+    profile: TopicProfile,
+    topic: str,
+) -> RoleClassificationDetail:
+    """Assign role plus matched phrases and a short reason (strict cluster+ML is fully explained)."""
+    text = _role_text(paper).lower()
     relevance = topic_relevance_score(paper, topic=topic, topic_profile=profile)
 
     if _strict_galaxy_cluster_ml_topic(profile):
-        return _classify_strict_galaxy_cluster_ml(text, relevance)
+        return _classify_strict_galaxy_cluster_ml_detail(paper, profile, topic)
 
     direct_terms = _merge_role_hints(
         profile,
@@ -219,33 +415,39 @@ def classify_paper_role(paper: PaperMetadata, profile: TopicProfile, topic: str)
 
     if profile.primary_domain == "cosmology":
         if "gravitational wave" in text and not any(a.lower() in text for a in profile.conditional_allow_terms):
-            return "off_topic"
+            return RoleClassificationDetail(role="off_topic", reason="GW discovery paper without cosmology allow-list")
 
     if profile.primary_domain == "galaxy_formation" and "axion" in text:
-        return "off_topic"
+        return RoleClassificationDetail(role="off_topic", reason="axion topic in galaxy-formation profile")
 
     if profile.primary_domain == "galaxy_formation":
         if any(t in text for t in background_terms) and not any(t in text for t in direct_terms):
-            return "background_review"
+            return RoleClassificationDetail(role="background_review", reason="background cues without direct hits")
 
     if relevance < 0.15:
-        return "off_topic"
+        return RoleClassificationDetail(role="off_topic", reason="low topic relevance")
 
     if any(t in text for t in background_terms) and relevance < 0.55:
-        return "background_review"
+        return RoleClassificationDetail(role="background_review", reason="background lexical cues")
 
     if any(t in text for t in theory_terms) and not any(t in text for t in direct_terms):
-        return "theory_interpretation"
+        return RoleClassificationDetail(role="theory_interpretation", reason="theory terms without direct hits")
 
     if any(t in text for t in method_terms) and "jwst" in text and relevance < 0.5:
-        return "method_or_instrument"
+        return RoleClassificationDetail(role="method_or_instrument", reason="JWST instrument/pipeline focus")
 
     if any(t in text for t in direct_terms):
-        return "direct_evidence"
+        return RoleClassificationDetail(role="direct_evidence", reason="matched direct-evidence vocabulary")
 
     if relevance >= 0.52:
-        return "direct_evidence"
-    return "background_review"
+        return RoleClassificationDetail(role="direct_evidence", reason="high lexical relevance fallback")
+
+    return RoleClassificationDetail(role="background_review", reason="default background bucket")
+
+
+def classify_paper_role(paper: PaperMetadata, profile: TopicProfile, topic: str) -> PaperRole:
+    """Assign PaperRole using profile domain, relevance, and lexical cues."""
+    return classify_paper_role_detailed(paper, profile, topic).role
 
 
 class SelectionPolicy(BaseModel):
@@ -258,7 +460,7 @@ class SelectionPolicy(BaseModel):
     max_background: int = 1
     max_theory_interpretation: int = 1
     max_method_or_instrument: int = 1
-    max_background_roles_in_primary: int = 1
+    max_background_roles_in_primary: int = 0
     exclude_off_topic: bool = True
 
 
@@ -297,7 +499,8 @@ def default_selection_policy(max_papers: int) -> SelectionPolicy:
 def selection_policy_from_profile(profile: TopicProfile, max_papers: int) -> SelectionPolicy:
     """
     Start from default quotas, then widen method/theory caps when the profile expects
-    method, pipeline, calibration, or inference-style papers (e.g. ML method overlays).
+    method-style papers — except strict galaxy_clusters+ML, where the method primary cap
+    stays tight and theory primaries are capped at 1 so the set stays ML-heavy.
     """
     base = default_selection_policy(max_papers)
     types_l = {(t or "").strip().lower() for t in profile.expected_paper_types if (t or "").strip()}
@@ -310,7 +513,7 @@ def selection_policy_from_profile(profile: TopicProfile, max_papers: int) -> Sel
         "observational pipeline",
         "catalog construction",
     }
-    if methodish:
+    if methodish and not _strict_galaxy_cluster_ml_topic(profile):
         max_method = min(max(base.max_papers // 2, 2), max(2, max_method))
 
     if "inference" in types_l:
@@ -322,8 +525,26 @@ def selection_policy_from_profile(profile: TopicProfile, max_papers: int) -> Sel
     }
     if _strict_galaxy_cluster_ml_topic(profile):
         updates["min_direct_evidence"] = min(2, base.min_direct_evidence)
+        updates["max_method_or_instrument"] = 1
+        updates["max_theory_interpretation"] = 1
 
     return base.model_copy(update=updates)
+
+
+def _method_allowed_in_primary_strict(
+    paper: PaperMetadata,
+    profile: TopicProfile,
+    topic: str,
+    ranked_row: RankedPaper,
+) -> bool:
+    if not _strict_galaxy_cluster_ml_topic(profile):
+        return True
+    if ranked_row.relevance_score < 0.45:
+        return False
+    text = _role_text(paper)
+    if not has_strong_ml_signal(text):
+        return False
+    return _has_cluster_terms(text.lower())
 
 
 def select_primary_ranked_with_quotas(
@@ -384,7 +605,8 @@ def select_primary_ranked_with_quotas(
 
     directs = sorted([r for r in pool_thresh if role_of(r) == "direct_evidence"], key=rk)
     theories = sorted([r for r in pool_thresh if role_of(r) == "theory_interpretation"], key=rk)
-    methods = sorted([r for r in pool_thresh if role_of(r) == "method_or_instrument"], key=rk)
+    methods_all = sorted([r for r in pool_thresh if role_of(r) == "method_or_instrument"], key=rk)
+    methods = [r for r in methods_all if _method_allowed_in_primary_strict(r.metadata, profile, topic, r)]
     backgrounds = sorted(
         [
             r

@@ -124,7 +124,7 @@ def build_research_crew(llm: Any) -> Crew:
             '  "hypotheses": [\n'
             "    {\n"
             '      "claim": "...",\n'
-            '      "status": "validated | plausible | rejected",\n'
+            '      "status": "source_validated | cross_paper_supported | plausible | unsupported | rejected",\n'
             '      "supporting_papers": ["..."],\n'
             '      "evidence_basis": ["..."],\n'
             '      "proposed_test": "...",\n'
@@ -142,10 +142,12 @@ def build_research_crew(llm: Any) -> Crew:
             "  ]\n"
             "}\n\n"
             "Rules:\n"
-            '- A hypothesis can be "validated" only if the key mechanism appears explicitly in extracted paper analyses.\n'
-            '- If mechanism is domain-plausible but not explicit in supplied evidence, mark it "plausible".\n'
-            '- Use "rejected" when evidence is insufficient or claims are unfalsifiable.\n'
-            "- Do not mark validated based on general cosmology knowledge alone."
+            '- Use "source_validated" only if the key mechanism appears explicitly in extracted paper analyses (one strong paper).\n'
+            '- Use "cross_paper_supported" only if multiple extracted analyses independently support the mechanism.\n'
+            '- If mechanism is domain-plausible but not explicit in supplied evidence, mark "plausible".\n'
+            '- Use "unsupported" when the corpus does not contain enough extracted evidence to judge.\n'
+            '- Use "rejected" when claims are unfalsifiable or clearly contradicted by supplied analyses.\n'
+            "- Do not upgrade to source_validated or cross_paper_supported based on general cosmology knowledge alone."
         ),
         expected_output=(
             'Valid JSON object containing key "hypotheses".'
@@ -157,8 +159,9 @@ def build_research_crew(llm: Any) -> Crew:
     critique_hypotheses = Task(
         description=(
             "Critique generated hypotheses and return ONLY valid JSON with key 'hypotheses'. "
-            "Each hypothesis must have status in {validated, plausible, rejected}. "
-            "Validated requires explicit mechanism evidence in extracted analyses."
+            "Each hypothesis must have status in "
+            "{source_validated, cross_paper_supported, plausible, unsupported, rejected}. "
+            "source_validated / cross_paper_supported require explicit mechanism phrases in extracted analyses."
         ),
         expected_output=(
             "Valid JSON hypotheses list with corrected statuses and grounding notes."
@@ -177,7 +180,8 @@ def build_research_crew(llm: Any) -> Crew:
             "Use the previous task outputs:\n"
             "- structured analyses\n"
             "- field synthesis\n"
-            "- status-labeled hypotheses (validated/plausible/rejected)\n\n"
+            "- status-labeled hypotheses "
+            "(source_validated / cross_paper_supported / plausible / unsupported / rejected)\n\n"
             "The report must include:\n"
             "1. Executive summary\n"
             "2. Selected papers table\n"
@@ -192,7 +196,7 @@ def build_research_crew(llm: Any) -> Crew:
         ),
         expected_output=(
             "A structured final report with executive summary, evidence-grounded conclusions, "
-            "tensions/disagreements, validated hypotheses, limitations, open questions, and explicit paper citations."
+            "tensions/disagreements, labeled hypotheses (source_validated / cross_paper_supported / …), limitations, open questions, and explicit paper citations."
         ),
         agent=report_compiler,
         context=[analyze_selected_papers, synthesize_field, critique_hypotheses],

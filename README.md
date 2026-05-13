@@ -177,7 +177,7 @@ High-level directories:
   - `paper_analyzer`: converts each selected paper into structured `PaperAnalysis` fields (question, methods, datasets, constraints, systematics, limitations).
   - `synthesis_agent`: aggregates multiple paper analyses into a field-level synthesis (consensus, tensions, recurring weaknesses, open problems).
   - `research_strategist`: proposes concrete, testable research hypotheses grounded in extracted evidence.
-  - `skeptical_referee`: critiques and re-labels hypotheses (`validated`/`plausible`/`rejected`) based on explicit evidence and falsifiability.
+  - `skeptical_referee`: critiques and re-labels hypotheses (`source_validated`, `cross_paper_supported`, `plausible`, `unsupported`, `rejected`) based on explicit evidence and falsifiability.
   - `report_compiler`: assembles the final narrative report from analyses, synthesis, and labeled hypotheses.
 - Crew orchestration:
   - `crews/research_crew.py` exposes `build_research_crew(llm) -> Crew`
@@ -553,22 +553,21 @@ Paper-type multipliers:
 
 ## Recent Updates
 
-- **Stricter cluster+ML roles**: for `galaxy_clusters` + `machine_learning` overlay, **`direct_evidence`** requires cluster **and** ML phrases; survey-only cluster papers use **`background_infrastructure`**; primary selection no longer uses a catch-all pool fill that promoted weak “direct” rows; optional **`max_background_roles_in_primary`** (default **0**) documents in diagnostics. Reports append **`PaperRole`** to each primary line. **`bootstrap_paper_analysis(..., topic_profile=...)`** enriches structured fields from profile terms present in paper text.
-- **`expected_paper_types` wiring**: `profile_relevance_score` alignment bonus; **`selection_policy_from_profile`** adjusts **`max_method_or_instrument`** / **`max_theory_interpretation`**; **`classify_paper_role`** merges ML direct hints when the profile expects method-style papers; CLI uses **`selection_policy_from_profile`** and reports **`max_method_or_instrument`** in selection diagnostics. Tests: `tests/test_ranking_tool.py`, **`tests/test_paper_role_classifier.py`**.
+- **Stricter cluster+ML roles**: for `galaxy_clusters` + `machine_learning` overlay, **`direct_evidence`** requires cluster **and** strong ML phrases **used as a method** (`tools/ml_usage_signals.is_active_ml_usage` demotes comparative “cosmological emulators” mentions); generic “classification” / “regression” alone do not count; survey-style ML (e.g. photo-z / generic N(z) neural nets) without explicit galaxy-cluster vocabulary is **`background_infrastructure`** or **`off_topic`**, not **`method_or_instrument`**; survey-only cluster papers use **`background_infrastructure`**; large simulation suites without active ML map to **`theory_interpretation`**; primary selection no longer uses a catch-all pool fill that promoted weak “direct” rows; **`max_theory_interpretation`** is capped at **1** for this profile; optional **`max_background_roles_in_primary`** (default **0**) documents in diagnostics. Reports append **`PaperRole`** to each primary line. With **`--debug-report`**, diagnostics list per-primary **role detail** (matched cluster / strong ML terms, warnings). **`bootstrap_paper_analysis(..., topic_profile=...)`** enriches structured fields from profile terms present in paper text.
+- **`expected_paper_types` wiring**: `profile_relevance_score` alignment bonus; **`selection_policy_from_profile`** adjusts **`max_method_or_instrument`** (capped at **1** for strict galaxy_clusters+ML) and **`max_theory_interpretation`** for other profiles (e.g. inference-heavy cosmology); **`classify_paper_role`** merges ML direct hints when the profile expects method-style papers; CLI uses **`selection_policy_from_profile`** and reports quotas in selection diagnostics. Tests: `tests/test_ranking_tool.py`, **`tests/test_paper_role_classifier.py`**, **`tests/test_ml_usage_signals.py`**.
 - **TopicProfile architecture** (ongoing): unified `config/astro_ontology.yaml` (**`galaxy_clusters`**, **`method_overlays`**, gated **`profile_overlays`**), `tools/topic_profiler.py`, `tools/query_generator.py`, profile-aware `rank_papers` / `profile_relevance_score`, and quota-based primary selection in `tools/paper_role_classifier.py`. CLI builds a `TopicProfile` and merged `TopicExpansion`; reports use **Selected Primary Papers** and optional diagnostics (`--debug-report` / `--no-debug-report`).
 - Strengthened Crew task contracts in `crews/research_crew.py` to request strict JSON for:
   - paper analysis extraction (`paper_analyses`)
   - hypothesis generation (`hypotheses`)
   - skeptical review output (status-corrected hypotheses)
-- Added explicit hypothesis status rubric: `validated`, `plausible`, `rejected`.
+- Hypothesis validation rubric: `source_validated`, `cross_paper_supported`, `plausible`, `unsupported`, `rejected` (CLI maps legacy `validated` → `source_validated`).
 - Added deterministic topic expansion for S8/weak-lensing topics (Planck, DES, KiDS, HSC, ACT, SPT; key observables/parameters/systematics).
 - Improved bootstrap structured extraction in CLI:
   - dataset detection from title/text (e.g. DES Y3, KiDS-450),
   - methods/systematics extraction only when explicit in supplied text,
   - unknown list fields now default to `[]` (not `["not extracted"]`).
-- Added deterministic structured hypotheses in CLI with evidence-grounding checks:
-  - only marks `validated` when mechanism appears in extracted analyses,
-  - otherwise marks `plausible` with grounding notes.
+- Deterministic structured hypotheses in CLI with evidence-grounding checks:
+  - `cross_paper_supported` when multiple papers match mechanism phrases; `source_validated` for a single paper; else `plausible` with grounding notes.
 - Report rendering improvements:
   - fixture-aware heading (`Selected Fixture Papers`),
   - de-duplicated recent list against canonical/primary selected papers,

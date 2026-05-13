@@ -1,6 +1,6 @@
 """Pydantic schemas for structured research assistant I/O."""
 
-from .hypothesis import ResearchHypothesis
+from .hypothesis import HypothesisStatus, HypothesisValidationStatus, ResearchHypothesis
 from .paper import (
     CitationCounts,
     PaperCandidate,
@@ -17,6 +17,8 @@ from .topic_profile import ConditionalNegativeBlock, PaperRole, ProfileSource, T
 __all__ = [
     "CitationCounts",
     "FieldSynthesis",
+    "HypothesisStatus",
+    "HypothesisValidationStatus",
     "PaperAnalysis",
     "PaperCandidate",
     "PaperIdentity",

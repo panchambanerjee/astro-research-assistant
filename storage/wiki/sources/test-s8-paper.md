@@ -2,7 +2,7 @@
 title: "Test S8 Paper"
 slug: test-s8-paper
 page_type: source
-updated_at: 2026-05-13T18:09:25.572299+00:00
+updated_at: 2026-05-13T20:04:23.990723+00:00
 year: 2024
 doi: "10.1234/test"
 arxiv_id: "2401.00001"

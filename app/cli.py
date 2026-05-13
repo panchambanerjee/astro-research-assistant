@@ -14,8 +14,11 @@ import yaml
 
 from app.config import load_config
 from schemas import (
+    HypothesisStatus,
+    HypothesisValidationStatus,
     PaperAnalysis,
     PaperMetadata,
+    PaperRole,
     ResearchHypothesis,
     ResearchReport,
     TopicExpansion,
@@ -28,7 +31,7 @@ from tools.metadata_resolver import deduplicate_papers
 from tools.openalex_tool import search_openalex_works
 from tools.pdf_tool import download_pdf, extract_text_from_pdf
 from tools.paper_role_classifier import (
-    classify_paper_role,
+    classify_paper_role_detailed,
     select_primary_ranked_with_quotas,
     selection_policy_from_profile,
 )
@@ -880,16 +883,29 @@ def _make_hypothesis(
     already_done_risk: int,
 ) -> ResearchHypothesis:
     supporting = [a.paper for a in analyses if _paper_matches_hypothesis_mechanism(a, mechanism_terms)]
-    # Conservative rule for MVP: require explicit mechanism support across multiple analyses.
-    is_validated = len(supporting) >= 2
-    validation_status = "validated" if is_validated else "plausible"
-    grounding_notes = (
-        "Validated because mechanism terms were explicitly extracted from paper analyses."
-        if is_validated
-        else "Plausible but not directly grounded in supplied extracted mechanisms."
-    )
-    evidence_basis = []
-    if is_validated:
+    validation_status: HypothesisValidationStatus
+    grounding_notes: str
+    hyp_status: HypothesisStatus
+    if len(supporting) >= 2:
+        validation_status = "cross_paper_supported"
+        grounding_notes = (
+            "Multiple selected papers contain explicit extracted mechanism phrases matching this hypothesis."
+        )
+        hyp_status = "supported"
+    elif len(supporting) == 1:
+        validation_status = "source_validated"
+        grounding_notes = (
+            "A single selected paper’s extracted analysis contains explicit mechanism support; "
+            "this reflects the source paper’s claim, not independent cross-survey validation."
+        )
+        hyp_status = "supported"
+    else:
+        validation_status = "plausible"
+        grounding_notes = "Plausible but not directly grounded in supplied extracted mechanisms."
+        hyp_status = "refined"
+
+    evidence_basis: list[str] = []
+    if supporting:
         for analysis in analyses:
             if _paper_matches_hypothesis_mechanism(analysis, mechanism_terms):
                 evidence_basis.extend(analysis.systematics[:2])
@@ -901,7 +917,7 @@ def _make_hypothesis(
         statement=statement,
         rationale=rationale,
         supporting_evidence_papers=supporting,
-        status="supported" if is_validated else "refined",
+        status=hyp_status,
         validation_status=validation_status,
         grounding_notes=grounding_notes,
         evidence_basis=sorted(set(evidence_basis)),
@@ -1061,15 +1077,42 @@ def _build_structured_hypotheses(topic: str, analyses: list[PaperAnalysis]) -> l
     return hypotheses
 
 
-def _normalize_validation_status(raw: str | None) -> str:
-    value = (raw or "").strip().lower()
-    if "reject" in value:
+def _normalize_validation_status(raw: str | None) -> HypothesisValidationStatus:
+    v = (raw or "").strip().lower().replace(" ", "_").replace("-", "_")
+    canonical: dict[str, HypothesisValidationStatus] = {
+        "source_validated": "source_validated",
+        "cross_paper_supported": "cross_paper_supported",
+        "plausible": "plausible",
+        "unsupported": "unsupported",
+        "rejected": "rejected",
+        "validated": "source_validated",
+        "validated_in_source": "source_validated",
+    }
+    if v in canonical:
+        return canonical[v]
+    if "reject" in v:
         return "rejected"
-    if "valid" in value:
-        return "validated"
-    if "plaus" in value:
+    if "unsupported" in v or "insufficient" in v:
+        return "unsupported"
+    if "cross" in v and "support" in v:
+        return "cross_paper_supported"
+    if "source" in v and "valid" in v:
+        return "source_validated"
+    if "valid" in v and "invalid" not in v and "cross" not in v:
+        return "source_validated"
+    if "plaus" in v:
         return "plausible"
     return "plausible"
+
+
+def _hypothesis_status_from_validation(validation: HypothesisValidationStatus) -> HypothesisStatus:
+    if validation in ("cross_paper_supported", "source_validated"):
+        return "supported"
+    if validation == "rejected":
+        return "retired"
+    if validation == "unsupported":
+        return "challenged"
+    return "refined"
 
 
 def _map_supporting_papers(raw_support: list[str], selected_papers: list[PaperMetadata]) -> list[PaperMetadata]:
@@ -1117,8 +1160,8 @@ def _extract_hypotheses_from_crew_text(
                     statement=claim,
                     rationale=str(item.get("grounding_notes") or item.get("rationale") or ""),
                     supporting_evidence_papers=supporting_papers,
-                    status="supported" if status == "validated" else "refined",
-                    validation_status=status,  # type: ignore[arg-type]
+                    status=_hypothesis_status_from_validation(status),
+                    validation_status=status,
                     grounding_notes=str(item.get("grounding_notes") or ""),
                     evidence_basis=[str(x) for x in item.get("evidence_basis", []) if isinstance(x, str)],
                     proposed_test=str(item.get("proposed_test") or "") or None,
@@ -1473,6 +1516,26 @@ def research(
             f"- Matched profile terms: {', '.join(sorted(set(flat_matches))[:48])}"
         )
 
+    primary_roles_by_key: dict[str, PaperRole] = {}
+    if debug_report:
+        selection_diagnostics.append("- Primary selections (role detail):")
+    for idx, r in enumerate(primary_ranked, start=1):
+        detail = classify_paper_role_detailed(r.metadata, topic_profile, topic)
+        primary_roles_by_key[_paper_key(r.metadata)] = detail.role
+        if debug_report:
+            title = (r.metadata.title or "Untitled")[:88]
+            mc = ", ".join(detail.matched_cluster_terms[:8]) or "—"
+            mm = ", ".join(detail.matched_strong_ml_terms[:8]) or "—"
+            mw = ", ".join(detail.matched_weak_ml_terms[:6]) or "—"
+            wf = "; ".join(detail.warnings) if detail.warnings else ""
+            selection_diagnostics.append(f"  {idx}. {title}")
+            selection_diagnostics.append(f"     role={detail.role}; {detail.reason}")
+            selection_diagnostics.append(f"     matched_cluster: {mc}")
+            selection_diagnostics.append(f"     matched_strong_ml: {mm}")
+            selection_diagnostics.append(f"     matched_weak_ml: {mw}")
+            if wf:
+                selection_diagnostics.append(f"     note: {wf}")
+
     text_by_paper: dict[str, str] = {}
     downloaded_paths: list[Path] = []
     for paper in selected_papers:
@@ -1517,10 +1580,6 @@ def research(
         selected_papers=selected_papers,
     )
     hypotheses = parsed_hypotheses or fallback_hypotheses
-
-    primary_roles_by_key = {
-        _paper_key(r.metadata): classify_paper_role(r.metadata, topic_profile, topic) for r in primary_ranked
-    }
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     topic_slug = _slugify(topic)

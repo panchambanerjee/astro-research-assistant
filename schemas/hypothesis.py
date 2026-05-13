@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from .paper import PaperIdentity
 
 HypothesisStatus = Literal["draft", "refined", "challenged", "supported", "retired"]
-HypothesisValidationStatus = Literal["validated", "plausible", "rejected"]
+HypothesisValidationStatus = Literal[
+    "source_validated",
+    "cross_paper_supported",
+    "plausible",
+    "unsupported",
+    "rejected",
+]
 
 
 class ResearchHypothesis(BaseModel):
@@ -31,7 +37,8 @@ class ResearchHypothesis(BaseModel):
     grounding_notes: str = Field(
         default="",
         description=(
-            "How this status was assigned. 'validated' requires mechanism evidence in extracted analyses."
+            "How this status was assigned: e.g. source_validated = supported by a single cited paper’s "
+            "reported experiment; cross_paper_supported = multiple selected papers; plausible / unsupported / rejected."
         ),
     )
     evidence_basis: list[str] = Field(
