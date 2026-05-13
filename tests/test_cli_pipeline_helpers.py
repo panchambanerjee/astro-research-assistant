@@ -130,9 +130,29 @@ def test_no_profile_leakage_to_paper_analysis() -> None:
         topic="S8 tension between weak lensing and Planck",
         extracted_text="",
         expansion=expansion,
+        topic_profile=profile,
     )
     assert "DES" not in analysis.datasets
     assert "KiDS" not in analysis.datasets
+
+
+def test_profile_enrichment_adds_methods_when_in_abstract() -> None:
+    paper = PaperMetadata(
+        title="Cluster mass with ML",
+        abstract="we train a random forest regressor on x-ray luminosity and sz signal for galaxy clusters",
+    )
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    from tools.query_generator import topic_profile_to_expansion
+
+    expansion = topic_profile_to_expansion(profile)
+    analysis = bootstrap_paper_analysis(
+        paper=paper,
+        topic=profile.original_topic,
+        extracted_text="",
+        expansion=expansion,
+        topic_profile=profile,
+    )
+    assert "random forest" in " ".join(m.lower() for m in analysis.methods)
 
 
 def test_dataset_hints_do_not_match_substrings() -> None:

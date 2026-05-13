@@ -8,6 +8,110 @@ from schemas.paper import PaperMetadata, RankedPaper
 from schemas.topic_profile import PaperRole, TopicProfile
 from tools.ranking_tool import topic_relevance_score
 
+CLUSTER_TERMS: tuple[str, ...] = (
+    "galaxy cluster",
+    "galaxy clusters",
+    "clusters of galaxies",
+    "cluster mass",
+    "cluster cosmology",
+    "intracluster medium",
+    "intracluster",
+    "brightest cluster galaxy",
+    "intracluster light",
+    "x-ray cluster",
+    "x-ray clusters",
+    "sunyaev",
+    "sz effect",
+    "cluster gas",
+    "cluster survey",
+    "cluster catalog",
+    "weak-lensing mass",
+    "weak lensing mass",
+    "mass calibration",
+    "hydrostatic",
+    "erosita",
+    "bcg",
+    "icl",
+)
+
+ML_TERMS: tuple[str, ...] = (
+    "machine learning",
+    "deep learning",
+    "random forest",
+    "neural network",
+    "neural networks",
+    "u-net",
+    "unet",
+    "convolutional",
+    "cnn",
+    " gaussian process",
+    "emulator",
+    "regression",
+    "classification",
+    "simulation-based inference",
+    "image-to-image",
+    "deep neural",
+)
+
+_ASTRO_CONTEXT_TERMS: tuple[str, ...] = (
+    "galaxy",
+    "galaxies",
+    "cosmolog",
+    "cluster",
+    "survey",
+    "astronom",
+    "astro-ph",
+    "stellar",
+    "redshift",
+    "hubble",
+    "dark matter",
+    "mnras",
+    "apj",
+    "arxiv",
+)
+
+
+def _strict_galaxy_cluster_ml_topic(profile: TopicProfile) -> bool:
+    overlays = profile.matched_terms.get("method_overlays") or []
+    return profile.primary_domain == "galaxy_clusters" and "machine_learning" in overlays
+
+
+def _has_cluster_terms(text: str) -> bool:
+    tl = text.lower()
+    return any(t.lower() in tl for t in CLUSTER_TERMS)
+
+
+def _has_ml_terms(text: str) -> bool:
+    tl = text.lower()
+    return any(t.lower() in tl for t in ML_TERMS)
+
+
+def _has_astro_context(text: str) -> bool:
+    tl = text.lower()
+    return any(t in tl for t in _ASTRO_CONTEXT_TERMS)
+
+
+def _is_direct_ml_cluster_paper(text: str) -> bool:
+    return _has_cluster_terms(text) and _has_ml_terms(text)
+
+
+def _classify_strict_galaxy_cluster_ml(text: str, relevance: float) -> PaperRole:
+    """Science+method AND for galaxy_clusters topics with machine_learning overlay."""
+    if _is_direct_ml_cluster_paper(text):
+        return "direct_evidence"
+    if relevance < 0.12:
+        return "off_topic"
+    if _has_cluster_terms(text) and not _has_ml_terms(text):
+        return "background_infrastructure"
+    if _has_ml_terms(text) and _has_astro_context(text) and not _has_cluster_terms(text):
+        return "method_or_instrument" if relevance >= 0.22 else "background_infrastructure"
+    if _has_ml_terms(text) and relevance >= 0.3:
+        return "method_or_instrument"
+    if relevance < 0.22:
+        return "off_topic"
+    return "background_infrastructure"
+
+
 _DIRECT_EVIDENCE_TERMS = (
     "ceers",
     "jades",
@@ -101,6 +205,9 @@ def classify_paper_role(paper: PaperMetadata, profile: TopicProfile, topic: str)
     text = " ".join([paper.title or "", paper.abstract or "", paper.journal or "", paper.venue or ""]).lower()
     relevance = topic_relevance_score(paper, topic=topic, topic_profile=profile)
 
+    if _strict_galaxy_cluster_ml_topic(profile):
+        return _classify_strict_galaxy_cluster_ml(text, relevance)
+
     direct_terms = _merge_role_hints(
         profile,
         "direct_evidence",
@@ -136,7 +243,7 @@ def classify_paper_role(paper: PaperMetadata, profile: TopicProfile, topic: str)
     if any(t in text for t in direct_terms):
         return "direct_evidence"
 
-    if relevance >= 0.45:
+    if relevance >= 0.52:
         return "direct_evidence"
     return "background_review"
 
@@ -151,6 +258,7 @@ class SelectionPolicy(BaseModel):
     max_background: int = 1
     max_theory_interpretation: int = 1
     max_method_or_instrument: int = 1
+    max_background_roles_in_primary: int = 1
     exclude_off_topic: bool = True
 
 
@@ -174,6 +282,7 @@ def default_selection_policy(max_papers: int) -> SelectionPolicy:
             max_background=1,
             max_theory_interpretation=1,
             max_method_or_instrument=1,
+            max_background_roles_in_primary=0,
         )
     return SelectionPolicy(
         max_papers=cap,
@@ -181,6 +290,7 @@ def default_selection_policy(max_papers: int) -> SelectionPolicy:
         max_background=1,
         max_theory_interpretation=1,
         max_method_or_instrument=1,
+        max_background_roles_in_primary=0,
     )
 
 
@@ -206,12 +316,14 @@ def selection_policy_from_profile(profile: TopicProfile, max_papers: int) -> Sel
     if "inference" in types_l:
         max_theory = min(2, max_theory + 1)
 
-    return base.model_copy(
-        update={
-            "max_method_or_instrument": max_method,
-            "max_theory_interpretation": max_theory,
-        }
-    )
+    updates: dict[str, object] = {
+        "max_method_or_instrument": max_method,
+        "max_theory_interpretation": max_theory,
+    }
+    if _strict_galaxy_cluster_ml_topic(profile):
+        updates["min_direct_evidence"] = min(2, base.min_direct_evidence)
+
+    return base.model_copy(update=updates)
 
 
 def select_primary_ranked_with_quotas(
@@ -243,10 +355,19 @@ def select_primary_ranked_with_quotas(
     ]
 
     background_md = [
-        r.metadata for r in ranked if roles[_paper_key(r.metadata)] == "background_review"
+        r.metadata
+        for r in ranked
+        if roles[_paper_key(r.metadata)] in ("background_review", "background_infrastructure")
     ][: max(10, pol.max_papers)]
 
-    primary_roles_eligible = {"direct_evidence", "theory_interpretation", "method_or_instrument"}
+    primary_roles_eligible: set[str] = {
+        "direct_evidence",
+        "theory_interpretation",
+        "method_or_instrument",
+    }
+    if pol.max_background_roles_in_primary > 0:
+        primary_roles_eligible.update({"background_review", "background_infrastructure"})
+
     pool = [r for r in ranked if roles[_paper_key(r.metadata)] in primary_roles_eligible]
     if not pool:
         pool = list(ranked)
@@ -258,28 +379,40 @@ def select_primary_ranked_with_quotas(
     def rk(r: RankedPaper) -> int:
         return r.rank or 10**9
 
-    directs = sorted(
-        [r for r in pool_thresh if roles[_paper_key(r.metadata)] == "direct_evidence"],
-        key=rk,
-    )
-    theories = sorted(
-        [r for r in pool_thresh if roles[_paper_key(r.metadata)] == "theory_interpretation"],
-        key=rk,
-    )
-    methods = sorted(
-        [r for r in pool_thresh if roles[_paper_key(r.metadata)] == "method_or_instrument"],
+    def role_of(r: RankedPaper) -> PaperRole:
+        return roles[_paper_key(r.metadata)]
+
+    directs = sorted([r for r in pool_thresh if role_of(r) == "direct_evidence"], key=rk)
+    theories = sorted([r for r in pool_thresh if role_of(r) == "theory_interpretation"], key=rk)
+    methods = sorted([r for r in pool_thresh if role_of(r) == "method_or_instrument"], key=rk)
+    backgrounds = sorted(
+        [
+            r
+            for r in pool_thresh
+            if role_of(r) in ("background_review", "background_infrastructure")
+        ],
         key=rk,
     )
 
     chosen: list[RankedPaper] = []
     chosen_keys: set[str] = set()
+    n_bg_in_primary = 0
 
-    def add_unique(r: RankedPaper) -> None:
+    def add_unique(r: RankedPaper, *, allow_background: bool = False) -> bool:
+        nonlocal n_bg_in_primary
         k = _paper_key(r.metadata)
         if k in chosen_keys or len(chosen) >= pol.max_papers:
-            return
+            return False
+        ro = role_of(r)
+        if ro in ("background_review", "background_infrastructure"):
+            if not allow_background:
+                return False
+            if n_bg_in_primary >= pol.max_background_roles_in_primary:
+                return False
+            n_bg_in_primary += 1
         chosen.append(r)
         chosen_keys.add(k)
+        return True
 
     for r in directs[: pol.min_direct_evidence]:
         add_unique(r)
@@ -293,8 +426,12 @@ def select_primary_ranked_with_quotas(
         add_unique(r)
     for r in methods[pol.max_method_or_instrument :]:
         add_unique(r)
-    for r in sorted(pool_thresh, key=rk):
-        add_unique(r)
+
+    if pol.max_background_roles_in_primary > 0:
+        for r in backgrounds:
+            if len(chosen) >= pol.max_papers:
+                break
+            add_unique(r, allow_background=True)
 
     primary_ranked = []
     for c in chosen:

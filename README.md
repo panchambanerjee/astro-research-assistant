@@ -197,47 +197,37 @@ High-level directories:
 
 ```mermaid
 flowchart TD
-    UserTopic[User topic string]
-    UserTopic --> Profiler[build_topic_profile]
-    Ontology[config/astro_ontology.yaml domains profile_overlays method_overlays]
-    Ontology --> Profiler
-    Profiler --> Profile[TopicProfile vocabulary negatives matched_terms expected_paper_types profile_confidence]
-    Profile --> QGen[topic_profile_to_expansion]
-    Profile --> Rank[rank_papers with topic_profile]
-    Profile --> Policy[selection_policy_from_profile]
-    Profile --> Roles[classify_paper_role]
-    QGen --> Legacy[legacy YAML expansion merge in CLI]
-    Legacy --> Expansion[TopicExpansion retrieval queries only]
-    Expansion --> Retrieval[Retrieve OpenAlex arXiv ADS]
-    Retrieval --> Dedup[Deduplicate enrich]
-    Dedup --> Rank
-    Rank --> Roles
-    Rank --> Select[select_primary_ranked_with_quotas]
-    Policy --> Select
-    Roles --> Select
-    Select --> Payload[Selected paper payload PDFs optional]
-    Payload --> Crew[Research crew sequential tasks]
-    Crew --> Report[Report markdown]
-    Crew --> Wiki[Wiki source and evidence pages]
+    Q[Your research question]
+    Q --> Interpret[Interpret topic using the project ontology]
+    Interpret --> Plan[Build search plans and queries]
+    Plan --> Fetch[Fetch papers from literature services]
+    Fetch --> Score[Score rank and categorize papers]
+    Interpret --> Score
+    Score --> Pick[Choose papers for in depth reading]
+    Pick --> Pack[Prepare a bundle for the agents]
+    Pack --> Agents[Multi agent analysis and writing]
+    Agents --> Report[Written report]
+    Agents --> Wiki[Wiki style source notes]
 ```
 
-Notes:
+Notes (where to look in code if you need it):
 
-- **Retrieval and ranking run outside the crew**; the crew consumes the pre-selected payload.
-- **`TopicExpansion`** must not be treated as per-paper evidence; **`PaperAnalysis`** is grounded in paper text (see bootstrap and sanitization in `app/cli.py`).
-- When **`profile_confidence`** is low, **`profile_overlays`** are skipped and secondary domains are collapsed so weak domain matches do not flood vocabulary; **`method_overlays`** (e.g. machine learning) still apply when the topic mentions them.
+- **Interpret** reads `config/astro_ontology.yaml` and builds a `TopicProfile`; **Plan** turns that into a `TopicExpansion` (plus optional legacy YAML in the CLI).
+- **Score** / **Pick** use deterministic ranking and role rules (`tools/ranking_tool.py`, `tools/paper_role_classifier.py`).
+- **Fetch** through **Pack** run **outside** CrewAI; **Agents** consumes the pre-selected bundle.
+- **TopicExpansion** is for search only; per-paper **`PaperAnalysis`** is grounded in each paper’s own text (bootstrap + cleanup in `app/cli.py`). When **profile confidence** is low, narrow “profile overlays” are skipped so weak topic matches do not flood vocabulary; cross-cutting method hints (e.g. machine learning) can still apply.
 
 ### Crew-only flow (after papers are selected)
 
 ```mermaid
 flowchart TD
-    Payload[Selected paper payload from CLI] --> Analyze[Paper analyzer task]
-    Analyze --> Synth[Synthesis task]
-    Synth --> Hyp[Hypothesis generation task]
-    Hyp --> Referee[Skeptical referee task]
-    Referee --> Compile[Report compiler task]
-    Compile --> ReportOut[Final report markdown]
-    Compile --> WikiOut[Wiki updates]
+    In[Paper bundle from the step above] --> Read[Read and structure each paper]
+    Read --> Combine[Combine findings across papers]
+    Combine --> Hyp[Draft research hypotheses]
+    Hyp --> Review[Stress test hypotheses]
+    Review --> Write[Write final report]
+    Write --> R[Report file]
+    Write --> W[Wiki updates]
 ```
 
 ## Reference YAML ontologies (`ontology/`)
@@ -386,15 +376,12 @@ Mode branch (high level):
 
 ```mermaid
 flowchart TD
-    runCmd[Research command] --> modeChoice{Input JSON provided}
-    modeChoice -->|Yes| fixtureMode[Fixture mode]
-    modeChoice -->|No| liveMode[Live mode]
-    fixtureMode --> fixtureLoad[Load fixture papers]
-    fixtureLoad --> profileRank[TopicProfile rank select bootstrap]
-    liveMode --> profile[TopicProfile plus TopicExpansion]
-    profile --> retrieval[Retrieve OpenAlex arXiv ADS]
-    retrieval --> profileRank
-    profileRank --> crewWiki[Crew when available report wiki]
+    Start[Run research command] --> Branch{Using a saved paper list}
+    Branch -->|Yes| Saved[Load papers from your JSON file]
+    Branch -->|No| Online[Search online literature archives]
+    Saved --> Core[Rank pick and summarize evidence]
+    Online --> Core
+    Core --> Out[Report and wiki output]
 ```
 
 ### Live Retrieval Controls
@@ -511,7 +498,7 @@ The CLI separates three objects end-to-end:
 |-------|---------------------|------|
 | Topic interpretation | `TopicProfile` (`schemas/topic_profile.py`) | Ontology-backed **`primary_domain`**, vocabulary, `arxiv_categories`, `paper_role_hints`, `relevance_weights`, negatives, conditional GW rules, **`matched_terms`** (keys such as domain names, **`profile_overlays`**, **`method_overlays`**), **`expected_paper_types`** (from method overlays or future domain fields), **`profile_confidence`**. |
 | Retrieval planning | `TopicExpansion` (`schemas/topic_expansion.py`) | Search queries and hints for OpenAlex / ADS / arXiv only. |
-| Per-paper evidence | `PaperAnalysis` | Only what the paper title, abstract, metadata, or extracted text supports; bootstrap does **not** merge expansion vocabulary into list fields, and short survey codes use **word-boundary** matching for `datasets`. |
+| Per-paper evidence | `PaperAnalysis` | Only what the paper title, abstract, metadata, or extracted text supports; bootstrap does **not** merge expansion vocabulary into list fields, and short survey codes use **word-boundary** matching for `datasets`. When `topic_profile` is passed into `bootstrap_paper_analysis`, a deterministic **`_enrich_analysis_from_profile`** step adds profile `methods` / `observables` / `parameters` / `systematics` / `instruments` **only if** each string appears literally in title/abstract/extracted text, then **`_clean_paper_analysis_against_text`** runs again. |
 
 Pipeline sketch: `config/astro_ontology.yaml` → `build_topic_profile` (domains + gated **`profile_overlays`** + **`method_overlays`**) → `topic_profile_to_expansion` (merged with legacy YAML expansion in `app/cli.py`) → retrieval → `rank_papers(..., topic_profile=...)` (vocabulary + **`expected_paper_types` alignment bonus**) → `selection_policy_from_profile` → `select_primary_ranked_with_quotas` (`classify_paper_role` with merged hints + ML direct cues when expected) → Crew.
 
@@ -521,8 +508,9 @@ Pipeline sketch: `config/astro_ontology.yaml` → `build_topic_profile` (domains
 - **Ranking**: `profile_relevance_score` adds a capped raw bonus when the paper title/abstract (plus journal/venue/categories) contains short phrase families aligned with those types (see `_EXPECTED_TYPE_PHRASES` in `tools/ranking_tool.py`). This nudges method-heavy papers up without moving ranking logic into prompts.
 - **Selection**: `selection_policy_from_profile(profile, max_papers)` returns a `SelectionPolicy` derived from `default_selection_policy` but may raise **`max_method_or_instrument`** (and **`max_theory_interpretation`** when *inference* is expected) so quota filling can admit more pipeline/calibration papers for ML/calibration-style topics. The early quota pass uses **`max_method_or_instrument`** for `method_or_instrument` roles (not the background cap).
 - **Roles**: When `expected_paper_types` implies methods or inference, additional ML-related substrings are merged into **direct_evidence** hints so cluster+ML papers are less likely to be mis-bucketed as generic background.
+- **Galaxy clusters + machine learning** (`primary_domain` = `galaxy_clusters` and `method_overlays` includes `machine_learning`): **`direct_evidence`** requires **both** cluster-oriented phrases and ML-oriented phrases in title/abstract; cluster-only survey/context papers map to **`background_infrastructure`**; the permissive “high relevance alone ⇒ direct” path is disabled for this profile shape.
 
-Reports label the main ranked set **Selected Primary Papers** (fixture mode still uses **Selected Fixture Papers**). Optional **Selection Diagnostics** and **TopicProfile (debug)** sections are included by default; pass `--no-debug-report` to omit them. Diagnostics include **`max_method_or_instrument`** in the selection policy line.
+Reports label the main ranked set **Selected Primary Papers** (fixture mode still uses **Selected Fixture Papers**). Optional **Selection Diagnostics** and **TopicProfile (debug)** sections are included by default; pass `--no-debug-report` to omit them. Diagnostics include **`max_method_or_instrument`** and **`max_background_roles_in_primary`** in the selection policy line. Each primary paper line is suffixed with its resolved **`PaperRole`** (for example `… (2023) — direct_evidence`).
 
 ## Deterministic Ranking Summary
 
@@ -542,7 +530,7 @@ Recent high-signal scoring blend:
 For JWST/high-z-style topics, explicit negative terms (e.g. axion/biology-style drift) are penalized in relevance scoring.
 For dark-energy topics, non-cosmology GW discovery papers (e.g. GW150914 binary-black-hole discovery without standard-siren/dark-energy context) receive strong negative relevance penalties; papers that mention allowed phrases (e.g. standard siren, luminosity distance) are not over-penalized.
 
-Primary selection uses **`selection_policy_from_profile`** and **`select_primary_ranked_with_quotas`** (`tools/paper_role_classifier.py`): defaults favor **direct_evidence** papers, then **theory_interpretation**, then **method_or_instrument**, each capped by **`SelectionPolicy`** (`max_theory_interpretation`, **`max_method_or_instrument`**, `max_background` for the background list only).
+Primary selection uses **`selection_policy_from_profile`** and **`select_primary_ranked_with_quotas`** (`tools/paper_role_classifier.py`): defaults favor **direct_evidence** papers, then **theory_interpretation**, then **method_or_instrument**, each capped by **`SelectionPolicy`** (`max_theory_interpretation`, **`max_method_or_instrument`**, `max_background` for the background list only). Optional **`max_background_roles_in_primary`** (default **0**) can admit a capped number of **background_review** / **background_infrastructure** rows into the primary list when non-zero; strict cluster+ML runs keep it at **0** so survey-only papers stay in the **Background / Infrastructure** report section. Primary report lines include each paper’s resolved **`PaperRole`** when diagnostics are enabled.
 
 Paper-type multipliers:
 - `review` x `0.85`
@@ -565,6 +553,7 @@ Paper-type multipliers:
 
 ## Recent Updates
 
+- **Stricter cluster+ML roles**: for `galaxy_clusters` + `machine_learning` overlay, **`direct_evidence`** requires cluster **and** ML phrases; survey-only cluster papers use **`background_infrastructure`**; primary selection no longer uses a catch-all pool fill that promoted weak “direct” rows; optional **`max_background_roles_in_primary`** (default **0**) documents in diagnostics. Reports append **`PaperRole`** to each primary line. **`bootstrap_paper_analysis(..., topic_profile=...)`** enriches structured fields from profile terms present in paper text.
 - **`expected_paper_types` wiring**: `profile_relevance_score` alignment bonus; **`selection_policy_from_profile`** adjusts **`max_method_or_instrument`** / **`max_theory_interpretation`**; **`classify_paper_role`** merges ML direct hints when the profile expects method-style papers; CLI uses **`selection_policy_from_profile`** and reports **`max_method_or_instrument`** in selection diagnostics. Tests: `tests/test_ranking_tool.py`, **`tests/test_paper_role_classifier.py`**.
 - **TopicProfile architecture** (ongoing): unified `config/astro_ontology.yaml` (**`galaxy_clusters`**, **`method_overlays`**, gated **`profile_overlays`**), `tools/topic_profiler.py`, `tools/query_generator.py`, profile-aware `rank_papers` / `profile_relevance_score`, and quota-based primary selection in `tools/paper_role_classifier.py`. CLI builds a `TopicProfile` and merged `TopicExpansion`; reports use **Selected Primary Papers** and optional diagnostics (`--debug-report` / `--no-debug-report`).
 - Strengthened Crew task contracts in `crews/research_crew.py` to request strict JSON for:

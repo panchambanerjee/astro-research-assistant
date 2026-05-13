@@ -68,3 +68,21 @@ def test_ranked_primary_respects_max_papers_with_profile_policy() -> None:
         policy=pol,
     )
     assert len(primary) <= pol.max_papers == 5
+
+
+def test_strict_cluster_survey_without_ml_is_infrastructure() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="SPTpol extended cluster survey overview",
+        abstract="sunyaev-zeldovich selected galaxy cluster catalog over millimeter maps and survey depth",
+    )
+    assert classify_paper_role(paper, profile, profile.original_topic) == "background_infrastructure"
+
+
+def test_strict_cluster_ml_requires_both_axes_for_direct() -> None:
+    profile = build_topic_profile("Galaxy Clusters and Machine Learning")
+    paper = PaperMetadata(
+        title="Painting baryons with U-Net",
+        abstract="we use deep learning and a u-net on galaxy cluster simulations to paint gas in n-body halos",
+    )
+    assert classify_paper_role(paper, profile, profile.original_topic) == "direct_evidence"

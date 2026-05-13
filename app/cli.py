@@ -28,6 +28,7 @@ from tools.metadata_resolver import deduplicate_papers
 from tools.openalex_tool import search_openalex_works
 from tools.pdf_tool import download_pdf, extract_text_from_pdf
 from tools.paper_role_classifier import (
+    classify_paper_role,
     select_primary_ranked_with_quotas,
     selection_policy_from_profile,
 )
@@ -575,9 +576,53 @@ def bootstrap_paper_analysis(
     topic: str,
     extracted_text: str,
     expansion: TopicExpansion,
+    *,
+    topic_profile: TopicProfile | None = None,
 ) -> PaperAnalysis:
-    """Public name for deterministic paper analysis bootstrap (tests + leakage guards)."""
-    return _bootstrap_analysis(paper, topic, extracted_text, expansion)
+    """Deterministic paper analysis bootstrap; optional profile enriches lists from title/abstract text only."""
+    analysis = _bootstrap_analysis(paper, topic, extracted_text, expansion)
+    if topic_profile is None:
+        return analysis
+    evidence_text = _paper_evidence_text(paper, extracted_text)
+    metadata_text = _paper_metadata_text(paper)
+    enriched = _enrich_analysis_from_profile(analysis, paper, topic_profile, evidence_text)
+    return _clean_paper_analysis_against_text(
+        enriched, metadata_text=metadata_text, evidence_text=evidence_text
+    )
+
+
+def _enrich_analysis_from_profile(
+    analysis: PaperAnalysis,
+    paper: PaperMetadata,
+    profile: TopicProfile,
+    evidence_text: str,
+) -> PaperAnalysis:
+    """Add profile vocabulary terms only when they appear literally in title/abstract/extracted text."""
+    pool = f"{paper.title or ''} {paper.abstract or ''} {evidence_text or ''}".lower()
+
+    def pick_extra(profile_list: list[str], current: list[str]) -> list[str]:
+        seen = {x.lower() for x in current if x}
+        out = [x for x in current if x]
+        for term in profile_list:
+            if not term:
+                continue
+            tl = term.lower()
+            if tl in seen:
+                continue
+            if tl in pool:
+                out.append(term)
+                seen.add(tl)
+        return sorted(set(out), key=str.lower)
+
+    return analysis.model_copy(
+        update={
+            "observables": pick_extra(profile.observables, list(analysis.observables or [])),
+            "parameters": pick_extra(profile.parameters, list(analysis.parameters or [])),
+            "methods": pick_extra(profile.methods, list(analysis.methods or [])),
+            "systematics": pick_extra(profile.systematics, list(analysis.systematics or [])),
+            "instruments": pick_extra(profile.instruments, list(analysis.instruments or [])),
+        }
+    )
 
 
 def _astro_relevance_score(paper: PaperMetadata) -> float:
@@ -1144,6 +1189,7 @@ def _render_report_markdown(
     *,
     debug_report: bool = True,
     selection_diagnostics: list[str] | None = None,
+    primary_paper_roles: dict[str, str] | None = None,
 ) -> str:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     primary_keys = {_paper_key(p) for p in primary}
@@ -1185,7 +1231,10 @@ def _render_report_markdown(
         ]
     )
     for i, p in enumerate(primary, 1):
-        lines.append(f"{i}. {p.title or 'Untitled'} ({p.year or 'n/a'})")
+        rk = _paper_key(p)
+        role = primary_paper_roles.get(rk) if primary_paper_roles else None
+        role_suffix = f" — {role}" if role else ""
+        lines.append(f"{i}. {p.title or 'Untitled'} ({p.year or 'n/a'}){role_suffix}")
     lines.extend(["", "## Selected Recent High-Signal Papers"])
     if not recent_unique:
         lines.append("Recent high-signal papers are the same as the primary selected set for this run.")
@@ -1416,7 +1465,7 @@ def research(
         (
             f"- Selection policy: max_papers={pol.max_papers}, min_direct_evidence={pol.min_direct_evidence}, "
             f"max_theory={pol.max_theory_interpretation}, max_method_or_instrument={pol.max_method_or_instrument}, "
-            f"max_background_slot={pol.max_background}"
+            f"max_background_slot={pol.max_background}, max_background_roles_in_primary={pol.max_background_roles_in_primary}"
         ),
     ]
     if flat_matches:
@@ -1438,11 +1487,12 @@ def research(
         text_by_paper[_paper_key(paper)] = text
 
     analyses = [
-        _bootstrap_analysis(
+        bootstrap_paper_analysis(
             paper=paper,
             topic=topic,
             extracted_text=text_by_paper.get(_paper_key(paper), ""),
             expansion=expansion,
+            topic_profile=topic_profile,
         )
         for paper in selected_papers
     ]
@@ -1468,6 +1518,10 @@ def research(
     )
     hypotheses = parsed_hypotheses or fallback_hypotheses
 
+    primary_roles_by_key = {
+        _paper_key(r.metadata): classify_paper_role(r.metadata, topic_profile, topic) for r in primary_ranked
+    }
+
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     topic_slug = _slugify(topic)
     report_path = REPORTS_DIR / f"{topic_slug}.md"
@@ -1485,6 +1539,7 @@ def research(
         topic_profile=topic_profile,
         debug_report=debug_report,
         selection_diagnostics=selection_diagnostics if debug_report else None,
+        primary_paper_roles=primary_roles_by_key,
     )
     report_path.write_text(report_md, encoding="utf-8")
 
